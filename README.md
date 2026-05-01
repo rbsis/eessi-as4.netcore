@@ -1,4 +1,4 @@
-# <span>AS4.NET</span>
+# <span>AS4.NET Core [WORK IN PROGRESS]</span>
 
 ## Introduction
 
