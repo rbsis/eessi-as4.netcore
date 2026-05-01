@@ -80,6 +80,9 @@ namespace Eu.EDelivery.AS4.ComponentTests.Common
             Console.WriteLine(@"Starting AS4.NET component.as Console ..");
             var as4Msh = new AS4Component(Process.Start(mshInfo));
 
+            // Wait a little bit to make sure the DB is created.
+            System.Threading.Thread.Sleep(TimeSpan.FromSeconds(12));
+            Console.WriteLine(@"AS4.NET component as Console is started");
             var doc = new XmlDocument();
             doc.Load(Path.GetFullPath(".\\config\\settings.xml"));
             XmlNode urlNode = doc.SelectSingleNode("//*[local-name()='Setting'][@key='Url']/text()");
