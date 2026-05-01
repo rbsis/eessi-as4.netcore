@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Eu.EDelivery.AS4.Common;
 using Eu.EDelivery.AS4.Entities;
 using Eu.EDelivery.AS4.Exceptions;
+using Eu.EDelivery.AS4.Extensions;
 using Eu.EDelivery.AS4.Mappings.Core;
 using Eu.EDelivery.AS4.Model.Core;
 using Eu.EDelivery.AS4.Model.Internal;
@@ -13,7 +14,7 @@ using Eu.EDelivery.AS4.Repositories;
 using Eu.EDelivery.AS4.Serialization;
 using Eu.EDelivery.AS4.Steps.Receive.Participant;
 using Eu.EDelivery.AS4.Xml;
-using NLog;
+using log4net;
 using ReceivePMode = Eu.EDelivery.AS4.Model.PMode.ReceivingProcessingMode;
 using SendPMode = Eu.EDelivery.AS4.Model.PMode.SendingProcessingMode;
 using UserMessage = Eu.EDelivery.AS4.Model.Core.UserMessage;
@@ -29,7 +30,7 @@ namespace Eu.EDelivery.AS4.Steps.Receive
     [Description("Determines the PMode that must be used to process the received AS4 Message")]
     public class DeterminePModesStep : IStep
     {
-        private static readonly ILogger Logger = LogManager.GetCurrentClassLogger();
+        private static readonly ILog Logger = LogManager.GetLogger( System.Reflection.MethodBase.GetCurrentMethod().DeclaringType );
 
         private readonly IConfig _config;
         private readonly Func<DatastoreContext> _createContext;
@@ -259,8 +260,8 @@ namespace Eu.EDelivery.AS4.Steps.Receive
         {
             Logger.Error(
                 "Cannot determine ReceivingPMode because more than a single matching PMode was found (greater or equal than 10 points). "
-                + $"{Environment.NewLine} Please make the matching information more strict in the message packaging information so that only a single PMode is matched."
-                + $"{Environment.NewLine}{String.Join(Environment.NewLine, possibilities.Select(p => $" - {p.Id}"))}");
+                + $"{Config.Encode(Environment.NewLine)} Please make the matching information more strict in the message packaging information so that only a single PMode is matched."
+                + $"{Config.Encode(Environment.NewLine)}{Config.Encode(String.Join(Environment.NewLine, possibilities.Select(p => $" - {p.Id}")))}");
 
             return new ErrorResult(
                 "Cannot determine ReceivingPMode because more than a single matching PMode was found",
@@ -271,13 +272,13 @@ namespace Eu.EDelivery.AS4.Steps.Receive
         {
             Logger.Error(
                 "Cannot determine ReceivingPMode because no configured PMode matched the message packaging information enough (greater or equal than 10 points). "
-                + $"{Environment.NewLine} Please change the message packaging information of your ReceivingPMode(s) to match the message: "
-                + $"{Environment.NewLine} - PMode.Id"
-                + $"{Environment.NewLine} - PMode.MessagePacakging.PartyInfo.FromParty"
-                + $"{Environment.NewLine} - PMode.MessagePacakging.PartyInfo.ToParty"
-                + $"{Environment.NewLine} - PMode.MessagePackaging.CollaborationInfo.Service"
-                + $"{Environment.NewLine} - PMode.MessagePackaging.CollaborationInfo.Action"
-                + $"{Environment.NewLine} See the above trace logging to see for which rules your PMode has accuired points");
+                + $"{Config.Encode(Environment.NewLine)} Please change the message packaging information of your ReceivingPMode(s) to match the message: "
+                + $"{Config.Encode(Environment.NewLine)} - PMode.Id"
+                + $"{Config.Encode(Environment.NewLine)} - PMode.MessagePacakging.PartyInfo.FromParty"
+                + $"{Config.Encode(Environment.NewLine)} - PMode.MessagePacakging.PartyInfo.ToParty"
+                + $"{Config.Encode(Environment.NewLine)} - PMode.MessagePackaging.CollaborationInfo.Service"
+                + $"{Config.Encode(Environment.NewLine)} - PMode.MessagePackaging.CollaborationInfo.Action"
+                + $"{Config.Encode(Environment.NewLine)} See the above trace logging to see for which rules your PMode has accuired points");
 
             return new ErrorResult(
                 "Cannot determine ReceivingPMode because no configured PMode matched the message packaging information",

@@ -12,7 +12,7 @@ using Eu.EDelivery.AS4.Model.Core;
 using Eu.EDelivery.AS4.Model.PMode;
 using Eu.EDelivery.AS4.Repositories;
 using Eu.EDelivery.AS4.Serialization;
-using NLog;
+using log4net;
 using MessageExchangePattern = Eu.EDelivery.AS4.Entities.MessageExchangePattern;
 using ReceptionAwareness = Eu.EDelivery.AS4.Model.PMode.ReceptionAwareness;
 
@@ -28,7 +28,7 @@ namespace Eu.EDelivery.AS4.Services
         private readonly IAS4MessageBodyStore _messageBodyStore;
         private readonly IConfig _configuration;
 
-        private static readonly ILogger Logger = LogManager.GetCurrentClassLogger();
+        private static readonly ILog Logger = LogManager.GetLogger( System.Reflection.MethodBase.GetCurrentMethod().DeclaringType );
 
         /// <summary>
         /// Initializes a new instance of the <see cref="OutMessageService"/> class. 
@@ -162,7 +162,7 @@ namespace Eu.EDelivery.AS4.Services
                         .ForMessageUnit(messageUnit, as4Message.ContentType, pmode)
                         .BuildForSending(messageBodyLocation, url, st, op);
 
-                Logger.Debug($"Insert OutMessage {outMessage.EbmsMessageType} with {{Operation={outMessage.Operation}, Status={outMessage.Status}}}");
+                Logger.Debug($"Insert OutMessage {Config.Encode(outMessage.EbmsMessageType)} with {{Operation={Config.Encode(outMessage.Operation)}, Status={Config.Encode(outMessage.Status)}}}");
                 _repository.InsertOutMessage(outMessage);
                 results.Add(outMessage);
             }
@@ -310,7 +310,7 @@ namespace Eu.EDelivery.AS4.Services
                 {
                     m.Operation = Operation.ToBeSent;
                     m.MessageLocation = messageBodyLocation;
-                    Logger.Debug($"Update {m.EbmsMessageType} OutMessage {m.EbmsMessageId} with {{Operation=ToBeSent}}");
+                    Logger.Debug($"Update {Config.Encode(m.EbmsMessageType)} OutMessage {Config.Encode(m.EbmsMessageId)} with {{Operation=ToBeSent}}");
 
                     if (awareness?.IsEnabled ?? false)
                     {
@@ -331,8 +331,8 @@ namespace Eu.EDelivery.AS4.Services
                                 RetryType.Send);
 
                             Logger.Trace(
-                                $"Insert RetryReliability for OutMessage {m.EbmsMessageId} with "
-                                + $"{{RetryCount={awareness.RetryCount}, RetryInterval={awareness.RetryInterval}}}");
+                                $"Insert RetryReliability for OutMessage {Config.Encode(m.EbmsMessageId)} with "
+                                + $"{{RetryCount={Config.Encode(awareness.RetryCount)}, RetryInterval={Config.Encode(awareness.RetryInterval)}}}");
 
                             _repository.InsertRetryReliability(r);
                         }
