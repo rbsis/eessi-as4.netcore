@@ -1,60 +1,54 @@
-using System;
-using System.IO;
-using System.Threading.Tasks;
-using Eu.EDelivery.AS4.Common;
-using log4net;
+﻿using Eu.EDelivery.AS4.Common;
+using Microsoft.Extensions.Logging;
 
-namespace Eu.EDelivery.AS4.Strategies.Retriever
+namespace Eu.EDelivery.AS4.Strategies.Retriever;
+
+/// <summary>
+/// File Retriever Implementation to retrieve the FileStream of a local file
+/// </summary>
+public class FilePayloadRetriever : IPayloadRetriever
 {
+    public const string Key = "file:///";
+
+    private readonly ILogger<FilePayloadRetriever> _logger;
+
+    private readonly IConfig _config;
+
     /// <summary>
-    /// File Retriever Implementation to retrieve the FileStream of a local file
+    /// Initializes a new instance of the <see cref="FilePayloadRetriever"/> class.
     /// </summary>
-    public class FilePayloadRetriever : IPayloadRetriever
+    public FilePayloadRetriever(ILogger<FilePayloadRetriever> logger, IConfig configuration)
     {
-        public const string Key = "file:///";
+        _logger = logger;
+        _config = configuration;
+    }
 
-        private readonly IConfig _config;
+    /// <summary>
+    /// Retrieve <see cref="Stream"/> contents from a given <paramref name="location"/>.
+    /// </summary>
+    /// <param name="location">The location.</param>
+    /// <returns></returns>
+    /// <param name="cancellation"></param>
+    public Task<Stream> RetrievePayloadAsync(string location, CancellationToken cancellation)
+    {
+        var relativePayloadPath = location.Replace(Key, string.Empty);
+        var absolutePayloadPath = Path.GetFullPath(Path.Combine(Config.ApplicationPath, relativePayloadPath));
 
-        private static readonly ILog Logger = LogManager.GetLogger( System.Reflection.MethodBase.GetCurrentMethod().DeclaringType );
+        var payload = new FileInfo(absolutePayloadPath);
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="FilePayloadRetriever"/> class.
-        /// </summary>
-        public FilePayloadRetriever() : this(Config.Instance) { }
-        
-        /// <summary>
-        /// Initializes a new instance of the <see cref="FilePayloadRetriever"/> class.
-        /// </summary>
-        public FilePayloadRetriever(IConfig configuration)
+        var relativeRetrievalPath = _config.PayloadRetrievalLocation.Replace(Key, string.Empty);
+        var absoluteRetrievalPath = Path.GetFullPath(relativeRetrievalPath);
+
+        if (!StringComparer.OrdinalIgnoreCase.Equals(payload.Directory?.FullName, absoluteRetrievalPath))
         {
-            if (configuration == null)
-            {
-                throw new ArgumentNullException(nameof(configuration));
-            }
-
-            _config = configuration;
+            throw new NotSupportedException(
+                $"Only files from the '{_config.PayloadRetrievalLocation}' folder are allowed to be retrieved: {payload.Directory?.FullName} <> {absoluteRetrievalPath}");
         }
 
-        /// <summary>
-        /// Retrieve <see cref="Stream"/> contents from a given <paramref name="location"/>.
-        /// </summary>
-        /// <param name="location">The location.</param>
-        /// <returns></returns>
-        public Task<Stream> RetrievePayloadAsync(string location)
-        {
-            string relativePayloadPath = location.Replace(Key, string.Empty);
-            string absolutePayloadPath = Path.GetFullPath(Path.Combine(Config.ApplicationPath, relativePayloadPath));
+        var uri = new Uri(absolutePayloadPath);
+        Stream payloadStream = new FileStream(uri.LocalPath, FileMode.Open, FileAccess.Read, FileShare.Read);
 
-            var payload = new FileInfo(absolutePayloadPath);
-
-            string relativeRetrievalPath = _config.PayloadRetrievalLocation.Replace(Key, string.Empty);
-            string absoluteRetrievalPath = Path.GetFullPath(relativeRetrievalPath);
-
-            var uri = new Uri(absolutePayloadPath);
-            Stream payloadStream = new FileStream(uri.LocalPath, FileMode.Open, FileAccess.Read, FileShare.Read);
-
-            Logger.Debug($"Payload is successfully retrieved at location \"{location}\"");
-            return Task.FromResult(payloadStream);
-        }
+        _logger.LogDebug("Payload is successfully retrieved at location \"{Location}\"", location);
+        return Task.FromResult(payloadStream);
     }
 }

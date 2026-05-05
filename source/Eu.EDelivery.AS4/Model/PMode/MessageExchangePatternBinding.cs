@@ -1,8 +1,7 @@
-﻿namespace Eu.EDelivery.AS4.Model.PMode
+﻿namespace Eu.EDelivery.AS4.Model.PMode;
+
+public enum MessageExchangePatternBinding
 {
-    public enum MessageExchangePatternBinding
-    {
-        Push = 0,
-        Pull = 1        
-    }
+    Push = 0,
+    Pull = 1
 }

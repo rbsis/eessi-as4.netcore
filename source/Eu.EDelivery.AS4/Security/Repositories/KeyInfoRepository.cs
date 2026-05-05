@@ -2,47 +2,46 @@
 using System.Security.Cryptography.Xml;
 using Eu.EDelivery.AS4.Security.References;
 
-namespace Eu.EDelivery.AS4.Security.Repositories
+namespace Eu.EDelivery.AS4.Security.Repositories;
+
+/// <summary>
+/// Repository to navigate the <see cref="KeyInfo"/> Model
+/// </summary>
+internal class KeyInfoRepository
 {
+    private readonly KeyInfo _keyInfo;
+
     /// <summary>
-    /// Repository to navigate the <see cref="KeyInfo"/> Model
+    /// Initializes a new instance of the <see cref="KeyInfoRepository"/> class
     /// </summary>
-    internal class KeyInfoRepository
+    /// <param name="keyInfo"></param>
+    public KeyInfoRepository(KeyInfo keyInfo)
     {
-        private readonly KeyInfo _keyInfo;
+        _keyInfo = keyInfo;
+    }
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="KeyInfoRepository"/> class
-        /// </summary>
-        /// <param name="keyInfo"></param>
-        public KeyInfoRepository(KeyInfo keyInfo)
+    public X509Certificate2? GetCertificate()
+    {
+        if (_keyInfo == null)
         {
-            _keyInfo = keyInfo;
-        }
-
-        public X509Certificate2 GetCertificate()
-        {
-            if (_keyInfo == null)
-            {
-                return null;
-            }
-
-            foreach (object keyInfo in _keyInfo)
-            {
-                // Embedded (is this actually allowed?)
-                if (keyInfo is KeyInfoX509Data embeddedCertificate && embeddedCertificate.Certificates.Count > 0)
-                {
-                    return embeddedCertificate.Certificates[0] as X509Certificate2;
-                }
-
-                // Reference
-                if (keyInfo is SecurityTokenReference securityTokenReference)
-                {
-                    return securityTokenReference.Certificate;
-                }
-            }
-
             return null;
         }
+
+        foreach (var keyInfo in _keyInfo)
+        {
+            // Embedded (is this actually allowed?)
+            if (keyInfo is KeyInfoX509Data embeddedCertificate && embeddedCertificate.Certificates?.Count > 0)
+            {
+                return embeddedCertificate.Certificates[0] as X509Certificate2;
+            }
+
+            // Reference
+            if (keyInfo is SecurityTokenReference securityTokenReference)
+            {
+                return securityTokenReference.Certificate;
+            }
+        }
+
+        return null;
     }
 }

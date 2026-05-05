@@ -1,65 +1,64 @@
-﻿using System;
-using System.IO;
-using System.Threading.Tasks;
-using Eu.EDelivery.AS4.PayloadService.Models;
+﻿using Eu.EDelivery.AS4.PayloadService.Models;
 using Eu.EDelivery.AS4.PayloadService.Persistance;
 using Eu.EDelivery.AS4.PayloadService.UnitTests.Models;
 using Eu.EDelivery.AS4.PayloadService.UnitTests.Serialization;
-using Xunit;
+using Microsoft.Extensions.Logging.Abstractions;
 
-namespace Eu.EDelivery.AS4.PayloadService.UnitTests.Persistance
+namespace Eu.EDelivery.AS4.PayloadService.UnitTests.Persistance;
+
+/// <summary>
+/// Testing <see cref="FilePayloadPersister"/>
+/// </summary>
+[DeletePayloads]
+public class GivenFilePayloadPersisterFacts
 {
-    /// <summary>
-    /// Testing <see cref="FilePayloadPersister"/>
-    /// </summary>
-    public class GivenFilePayloadPersisterFacts
+    [Fact]
+    [DeletePayloads]
+    public async Task WritesFileWithMetaToDisk()
     {
-        [Fact]
-        public async Task WritesFileWithMetaToDisk()
-        {
-            // Arrange
-            const string expectedContent = "message data!";
-            using (Stream serializeContent = expectedContent.AsStream())
-            {
-                var persister = new FilePayloadPersister(new CurrentDirectoryHostingEnvironment());
+        // Arrange
+        const string ExpectedContent = "message data!";
+        using var serializeContent = ExpectedContent.AsStream();
+        var persister = new FilePayloadPersister(
+            NullLogger<FilePayloadPersister>.Instance,
+            new CurrentDirectoryHostEnvironment());
 
-                // Act
-                var payload = new Payload(serializeContent, CreateUniquePayloadMeta());
-                string newPayloadId = await persister.SavePayload(payload);
+        // Act
+        var payload = new Payload(serializeContent, CreateUniquePayloadMeta());
+        var newPayloadId = await persister.SavePayload(payload);
 
-                // Assert
-                Assert.Equal(expectedContent, DeserializeContent(newPayloadId));
-                Assert.Contains("originalfilename:", DeserializeContent(newPayloadId + ".meta"));
-            }
-        }
+        // Assert
+        Assert.Equal(ExpectedContent, DeserializeContent(newPayloadId));
+        Assert.Contains("originalfilename:", DeserializeContent(newPayloadId + ".meta"));
+    }
 
-        [Fact]
-        public async Task LoadsPayloadWithMetaFromDisk()
-        {
-            // Arrange
-            const string expectedContent = "message data!";
-            using (Stream serializeContent = expectedContent.AsStream())
-            {
-                var persister = new FilePayloadPersister(new CurrentDirectoryHostingEnvironment());
-                var payload = new Payload(serializeContent, CreateUniquePayloadMeta());
-                string savedPayloadId = await persister.SavePayload(payload);
+    [Fact]
+    [DeletePayloads]
+    public async Task LoadsPayloadWithMetaFromDisk()
+    {
+        // Arrange
+        const string ExpectedContent = "message data!";
+        using var serializeContent = ExpectedContent.AsStream();
+        var persister = new FilePayloadPersister(
+            NullLogger<FilePayloadPersister>.Instance,
+            new CurrentDirectoryHostEnvironment());
 
-                // Act
-                using (Payload actualPayload = await persister.LoadPayload(savedPayloadId))
-                {
-                    Assert.Equal(expectedContent, actualPayload.DeserializeContent());
-                }
-            }
-        }
+        // Act
+        var payload = new Payload(serializeContent, CreateUniquePayloadMeta());
+        var savedPayloadId = await persister.SavePayload(payload);
+        using var actualPayload = await persister.LoadPayload(savedPayloadId);
 
-        private static PayloadMeta CreateUniquePayloadMeta()
-        {
-            return new PayloadMeta(Guid.NewGuid() + ".txt");
-        }
+        // Assert
+        Assert.Equal(ExpectedContent, actualPayload.DeserializeContent());
+    }
 
-        private static string DeserializeContent(string id)
-        {
-            return File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Payloads", id));
-        }
+    private static PayloadMeta CreateUniquePayloadMeta()
+    {
+        return new PayloadMeta(Guid.NewGuid() + ".txt");
+    }
+
+    private static string DeserializeContent(string id)
+    {
+        return File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Payloads", id));
     }
 }

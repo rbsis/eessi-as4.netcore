@@ -1,28 +1,27 @@
-﻿namespace Eu.EDelivery.AS4.Utilities
+﻿namespace Eu.EDelivery.AS4.Utilities;
+
+/// <summary>
+/// Wraps the available ContentTypes for the Application
+/// </summary>
+public static class ContentTypeSupporter
 {
-    /// <summary>
-    /// Wraps the available ContentTypes for the Application
-    /// </summary>
-    public static class ContentTypeSupporter
+    public static bool IsContentTypeSupported(string contentType)
     {
-        public static bool IsContentTypeSupported(string contentType)
+        if (string.IsNullOrWhiteSpace(contentType))
         {
-            if (string.IsNullOrWhiteSpace(contentType))
-            {
-                return true;
-            }
-
-            return IsMimeContentType(contentType) || IsSoapContentType(contentType);
+            return true;
         }
 
-        public static bool IsMimeContentType(string contentType)
-        {
-            return contentType.StartsWith(Constants.ContentTypes.Mime);
-        }
+        return IsMimeContentType(contentType) || IsSoapContentType(contentType);
+    }
 
-        public static bool IsSoapContentType(string contentType)
-        {
-            return contentType.StartsWith(Constants.ContentTypes.Soap);
-        }
+    public static bool IsMimeContentType(string contentType)
+    {
+        return contentType.StartsWith(Constants.ContentTypes.Mime);
+    }
+
+    public static bool IsSoapContentType(string contentType)
+    {
+        return contentType.StartsWith(Constants.ContentTypes.Soap);
     }
 }

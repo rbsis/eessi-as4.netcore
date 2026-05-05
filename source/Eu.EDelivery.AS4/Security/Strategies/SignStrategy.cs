@@ -1,9 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Security.Cryptography.Xml;
-using System.Threading;
 using System.Xml;
 using Eu.EDelivery.AS4.Model.Core;
 using Eu.EDelivery.AS4.Security.Algorithms;
@@ -11,134 +8,134 @@ using Eu.EDelivery.AS4.Security.References;
 using Eu.EDelivery.AS4.Security.Signing;
 using Eu.EDelivery.AS4.Security.Transforms;
 using Eu.EDelivery.AS4.Serialization;
+using Eu.EDelivery.AS4.Streaming;
 using Reference = System.Security.Cryptography.Xml.Reference;
 
-namespace Eu.EDelivery.AS4.Security.Strategies
+namespace Eu.EDelivery.AS4.Security.Strategies;
+
+internal class SignStrategy : SignatureStrategy
 {
-    internal class SignStrategy : SignatureStrategy
+    public static SignStrategy ForAS4Message(AS4Message as4Message, CalculateSignatureConfig config)
     {
-        public static SignStrategy ForAS4Message(AS4Message as4Message, CalculateSignatureConfig config)
+        return new SignStrategy(
+            as4Message,
+            as4Message.EnvelopeDocument ?? AS4XmlSerializer.ToSoapEnvelopeDocument(as4Message),
+            config);
+    }
+
+    private readonly AS4Message _as4Message;
+    private readonly CalculateSignatureConfig _config;
+
+    private SignStrategy(AS4Message message, XmlDocument soapEnvelope, CalculateSignatureConfig config)
+        : base(soapEnvelope)
+    {
+        _as4Message = message;
+        _config = config;
+    }
+
+    public Signature SignDocument()
+    {
+        SetSigningAlgorithm(_config.SigningAlgorithm);
+
+        SetSecurityTokenReference(_config.SigningCertificate, _config.ReferenceTokenType);
+
+        SetSoapHeaderReferences(_as4Message.SigningId, _config.HashFunction);
+
+        SetAttachmentReferences(_as4Message.Attachments, _config.HashFunction);
+
+        ComputeSignature();
+
+        ResetAttachmentContents(_as4Message);
+
+        return Signature;
+    }
+
+    private void SetSigningAlgorithm(string signingAlgorithm)
+    {
+        if (SignedInfo is null)
         {
-            return new SignStrategy(
-                as4Message,
-                as4Message.EnvelopeDocument ?? AS4XmlSerializer.ToSoapEnvelopeDocument(as4Message, CancellationToken.None),
-                config);
+            throw new CryptographicException("SignedInfo is null");
         }
 
-        private readonly AS4Message _as4Message;
-        private readonly CalculateSignatureConfig _config;
+        var algorithm = SignatureAlgorithmProvider.Get(signingAlgorithm);
 
-        private SignStrategy(AS4Message message, XmlDocument soapEnvelope, CalculateSignatureConfig config)
-            : base(soapEnvelope)
+        SignedInfo.SignatureMethod = algorithm.GetIdentifier();
+    }
+
+    private void SetSecurityTokenReference(X509Certificate2 signingCertificate, X509ReferenceType securityTokenType)
+    {
+        var securityTokenReference = SecurityTokenReferenceProvider.Create(signingCertificate, securityTokenType);
+
+        SigningKey = GetSigningKeyFromCertificate(signingCertificate);
+        KeyInfo = new KeyInfo();
+
+        KeyInfo.AddClause(securityTokenReference);
+    }
+
+    private void SetSoapHeaderReferences(SigningId signingId, string hashFunction)
+    {
+        AddXmlReference(signingId.HeaderSecurityId, hashFunction);
+        AddXmlReference(signingId.BodySecurityId, hashFunction);
+    }
+
+    private void SetAttachmentReferences(IEnumerable<Attachment> attachments, string hashFunction)
+    {
+        foreach (var attachment in attachments)
         {
-            _as4Message = message;
-            _config = config;
+            AddAttachmentReference(attachment, hashFunction);
         }
+    }
 
-        public Signature SignDocument()
+    private static readonly object CertificateReaderLocker = new();
+
+    private static RSA GetSigningKeyFromCertificate(X509Certificate2 certificate)
+    {
+        // When handling a large load of messages in parallel, we sometimes get a 'file is in use' exception
+        // when loading the private key from the certificate.  Therefore, we synchronize access when
+        // loading the private key to prevent this.
+        lock (CertificateReaderLocker)
         {
-            SetSigningAlgorithm(_config.SigningAlgorithm);
-
-            SetSecurityTokenReference(_config.SigningCertificate, _config.ReferenceTokenType);
-
-            SetSoapHeaderReferences(_as4Message.SigningId, _config.HashFunction);
-
-            SetAttachmentReferences(_as4Message.Attachments, _config.HashFunction);
-
-            ComputeSignature();
-
-            ResetAttachmentContents(_as4Message);
-
-            return Signature;
+            // Call GetRSAPrivateKey to avoid KeySet does not exist exceptions that might be thrown.
+            var privateKey = certificate.GetRSAPrivateKey() ?? throw new CryptographicException(
+                    "Cannot use certificate for signing: certificate does not have a private key. " +
+                    "Please make sure that the private key is included in the certificate and is marked as 'Exportable'");
+            return privateKey;
         }
+    }
 
-        private void SetSigningAlgorithm(string signingAlgorithm)
+    private void AddXmlReference(string id, string hashFunction)
+    {
+        var reference = new Reference("#" + id) { DigestMethod = hashFunction };
+        var transform = new XmlDsigExcC14NTransform();
+        reference.AddTransform(transform);
+        AddReference(reference);
+    }
+
+    /// <summary>
+    /// Add Cid Attachment Reference
+    /// </summary>
+    /// <param name="attachment"></param>
+    /// <param name="digestMethod"></param>
+    private void AddAttachmentReference(Attachment attachment, string digestMethod)
+    {
+        // Reference wil dispose the stream so a NonCloseableStream wrapper is needed
+        var stream = new NonCloseableStream(attachment.Content);
+        var attachmentReference = new Reference(stream)
         {
-            var algorithm = SignatureAlgorithmProvider.Get(signingAlgorithm);
+            Uri = CidPrefix + attachment.Id,
+            DigestMethod = digestMethod
+        };
+        attachmentReference.AddTransform(new AttachmentSignatureTransform());
+        AddReference(attachmentReference);
 
-            SignedInfo.SignatureMethod = algorithm.GetIdentifier();
+        SetAttachmentTransformContentType(attachmentReference, attachment);
+    }
 
-            CryptoConfig.AddAlgorithm(algorithm.GetType(), algorithm.GetIdentifier());
-        }
-
-        private void SetSecurityTokenReference(X509Certificate2 signingCertificate, X509ReferenceType securityTokenType)
+    private static void ResetAttachmentContents(AS4Message as4Message)
+    {
+        foreach (var attachment in as4Message.Attachments)
         {
-            var securityTokenReference = SecurityTokenReferenceProvider.Create(signingCertificate, securityTokenType);
-
-            SigningKey = GetSigningKeyFromCertificate(signingCertificate);
-            KeyInfo = new KeyInfo();
-
-            KeyInfo.AddClause(securityTokenReference);
-        }
-
-        private void SetSoapHeaderReferences(SigningId signingId, string hashFunction)
-        {
-            AddXmlReference(signingId.HeaderSecurityId, hashFunction);
-            AddXmlReference(signingId.SamlSecurityId, hashFunction);
-            AddXmlReference(signingId.BodySecurityId, hashFunction);
-        }
-
-        private void SetAttachmentReferences(IEnumerable<Attachment> attachments, string hashFunction)
-        {
-            foreach (var attachment in attachments)
-            {
-                AddAttachmentReference(attachment, hashFunction);
-            }
-        }
-
-        private static readonly object CertificateReaderLocker = new object();
-
-        private static RSA GetSigningKeyFromCertificate(X509Certificate2 certificate)
-        {
-            // When handling a large load of messages in parallel, we sometimes get a 'file is in use' exception
-            // when loading the private key from the certificate.  Therefore, we synchronize access when
-            // loading the private key to prevent this.
-            lock (CertificateReaderLocker)
-            {
-                // Call GetRSAPrivateKey to avoid KeySet does not exist exceptions that might be thrown.
-                RSA privateKey = certificate.GetRSAPrivateKey();
-
-                if (privateKey == null)
-                {
-                    throw new CryptographicException(
-                        "Cannot use certificate for signing: certificate does not have a private key. " +
-                        "Please make sure that the private key is included in the certificate and is marked as 'Exportable'");
-                }
-
-                return privateKey;
-            }
-        }
-
-        private void AddXmlReference(string id, string hashFunction)
-        {
-            var reference = new Reference("#" + id) { DigestMethod = hashFunction };
-            Transform transform = new XmlDsigExcC14NTransform();
-            reference.AddTransform(transform);
-            base.AddReference(reference);
-        }
-
-        /// <summary>
-        /// Add Cid Attachment Reference
-        /// </summary>
-        /// <param name="attachment"></param>
-        /// <param name="digestMethod"></param>
-        private void AddAttachmentReference(Attachment attachment, string digestMethod)
-        {
-            var attachmentReference = new Reference(uri: CidPrefix + attachment.Id) { DigestMethod = digestMethod };
-            attachmentReference.AddTransform(new AttachmentSignatureTransform());
-            base.AddReference(attachmentReference);
-
-            SetReferenceStream(attachmentReference, attachment);
-            SetAttachmentTransformContentType(attachmentReference, attachment);
-            ResetReferenceStreamPosition(attachmentReference);
-        }
-
-        private static void ResetAttachmentContents(AS4Message as4Message)
-        {
-            foreach (Attachment attachment in as4Message.Attachments)
-            {
-                attachment.ResetContentPosition();
-            }
+            attachment.ResetContentPosition();
         }
     }
 }

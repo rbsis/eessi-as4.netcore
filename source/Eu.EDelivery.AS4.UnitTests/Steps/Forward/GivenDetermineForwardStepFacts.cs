@@ -1,113 +1,108 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Configuration;
-using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
+﻿using System.Configuration;
 using Eu.EDelivery.AS4.Model.Internal;
 using Eu.EDelivery.AS4.Model.PMode;
 using Eu.EDelivery.AS4.Steps.Forward;
 using Eu.EDelivery.AS4.UnitTests.Common;
-using Xunit;
+using Microsoft.Extensions.Logging.Abstractions;
 
-namespace Eu.EDelivery.AS4.UnitTests.Steps.Forward
+namespace Eu.EDelivery.AS4.UnitTests.Steps.Forward;
+
+public class GivenDetermineForwardStepFacts
 {
-    public class GivenDetermineForwardStepFacts
+    public class ValidMessagingContextFacts
     {
-        public class ValidMessagingContextFacts
+        [Fact]
+        public async Task SendingPModeCorrectlyDetermined()
         {
-            [Fact]
-            public async Task SendingPModeCorrectlyDetermined()
+            const string SendingPModeId = "Forward_SendingPMode_Id";
+
+            var receivingPMode = new ReceivingProcessingMode()
             {
-                const string sendingPModeId = "Forward_SendingPMode_Id";
-
-                var receivingPMode = new ReceivingProcessingMode()
+                MessageHandling = new MessageHandling()
                 {
-                    MessageHandling = new MessageHandling()
+                    Item = new AS4.Model.PMode.Forward()
                     {
-                        Item = new AS4.Model.PMode.Forward()
-                        {
-                            SendingPMode = sendingPModeId
-                        }
+                        SendingPMode = SendingPModeId
                     }
-                };
+                }
+            };
 
-                var config = new StubConfig(sendingPModes: new Dictionary<string, SendingProcessingMode>()
-                                            {
-                                                {sendingPModeId,new SendingProcessingMode(){Id=sendingPModeId}}
-                                            },
-                                            receivingPModes: new Dictionary<string, ReceivingProcessingMode>());
-
-                var context = new MessagingContext(new ReceivedMessage(Stream.Null), MessagingContextMode.Forward)
+            var config = new StubConfig(
+                sendingPModes: new Dictionary<string, SendingProcessingMode>()
                 {
-                    ReceivingPMode = receivingPMode
-                };
+                    [SendingPModeId] = new SendingProcessingMode() { Id = SendingPModeId }
+                },
+                receivingPModes: new Dictionary<string, ReceivingProcessingMode>());
 
-                var sut = new DetermineRoutingStep(config);
-                var result = await sut.ExecuteAsync(context);
+            var context = new MessagingContext(new ReceivedMessage(Stream.Null), MessagingContextMode.Forward)
+            {
+                ReceivingPMode = receivingPMode
+            };
 
-                Assert.True(result.Succeeded);
-                Assert.NotNull(result.MessagingContext.SendingPMode);
-            }
+            var sut = new DetermineRoutingStep(NullLogger<DetermineRoutingStep>.Instance, config);
+            var result = await sut.ExecuteAsync(context, CancellationToken.None);
+
+            Assert.True(result.Succeeded);
+            Assert.NotNull(result.MessagingContext.SendingPMode);
+        }
+    }
+
+    public class InvalidMessagingContextFacts
+    {
+        [Fact]
+        public async Task ExceptionWhenNoReceivingPModeAvailable()
+        {
+            var messagingContext = new MessagingContext(new ReceivedMessage(Stream.Null), MessagingContextMode.Forward) { ReceivingPMode = null };
+
+            var step = new DetermineRoutingStep(NullLogger<DetermineRoutingStep>.Instance, StubConfig.Default);
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() => step.ExecuteAsync(messagingContext, CancellationToken.None));
         }
 
-        public class InvalidMessagingContextFacts
+
+        [Fact]
+        public async Task ExceptionWhenReceivingPModeIsInvalid()
         {
-            [Fact]
-            public async Task ExceptionWhenNoReceivingPModeAvailable()
+            var receivingPMode = new ReceivingProcessingMode()
             {
-                var messagingContext = new MessagingContext(new ReceivedMessage(Stream.Null), MessagingContextMode.Forward) { ReceivingPMode = null };
-
-                var step = new DetermineRoutingStep(StubConfig.Default);
-
-                await Assert.ThrowsAsync<InvalidOperationException>(() => step.ExecuteAsync(messagingContext));
-            }
-
-
-            [Fact]
-            public async Task ExceptionWhenReceivingPModeIsInvalid()
-            {
-                var receivingPMode = new ReceivingProcessingMode()
+                MessageHandling = new MessageHandling()
                 {
-                    MessageHandling = new MessageHandling()
+                    Item = new AS4.Model.PMode.Deliver()
+                }
+            };
+
+            var messagingContext = new MessagingContext(new ReceivedMessage(Stream.Null), MessagingContextMode.Forward)
+            {
+                ReceivingPMode = receivingPMode
+            };
+
+            var step = new DetermineRoutingStep(NullLogger<DetermineRoutingStep>.Instance, StubConfig.Default);
+
+            await Assert.ThrowsAsync<ConfigurationErrorsException>(() => step.ExecuteAsync(messagingContext, CancellationToken.None));
+        }
+
+        [Fact]
+        public async Task ExceptionWhenSendingPModeNotFound()
+        {
+            var receivingPMode = new ReceivingProcessingMode
+            {
+                MessageHandling = new MessageHandling
+                {
+                    Item = new AS4.Model.PMode.Forward
                     {
-                        Item = new AS4.Model.PMode.Deliver()
+                        SendingPMode = "Forward_SendingPMode_Id"
                     }
-                };
+                }
+            };
 
-                var messagingContext = new MessagingContext(new ReceivedMessage(Stream.Null), MessagingContextMode.Forward)
-                {
-                    ReceivingPMode = receivingPMode
-                };
-
-                var step = new DetermineRoutingStep(StubConfig.Default);
-
-                await Assert.ThrowsAsync<ConfigurationErrorsException>(() => step.ExecuteAsync(messagingContext));
-            }
-
-            [Fact]
-            public async Task ExceptionWhenSendingPModeNotFound()
+            var messagingContext = new MessagingContext(new ReceivedMessage(Stream.Null), MessagingContextMode.Forward)
             {
-                var receivingPMode = new ReceivingProcessingMode
-                {
-                    MessageHandling = new MessageHandling
-                    {
-                        Item = new AS4.Model.PMode.Forward
-                        {
-                            SendingPMode = "Forward_SendingPMode_Id"
-                        }
-                    }
-                };
+                ReceivingPMode = receivingPMode
+            };
 
-                var messagingContext = new MessagingContext(new ReceivedMessage(Stream.Null), MessagingContextMode.Forward)
-                {
-                    ReceivingPMode = receivingPMode
-                };
+            var step = new DetermineRoutingStep(NullLogger<DetermineRoutingStep>.Instance, StubConfig.Default);
 
-                var step = new DetermineRoutingStep(StubConfig.Default);
-
-                await Assert.ThrowsAsync<ConfigurationErrorsException>(() => step.ExecuteAsync(messagingContext));
-            }
+            await Assert.ThrowsAsync<ConfigurationErrorsException>(() => step.ExecuteAsync(messagingContext, CancellationToken.None));
         }
     }
 }

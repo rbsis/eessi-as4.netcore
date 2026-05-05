@@ -1,30 +1,29 @@
-﻿using System;
-using Eu.EDelivery.AS4.Validators;
+﻿using Eu.EDelivery.AS4.Validators;
 using FluentValidation.Results;
 
-namespace Eu.EDelivery.AS4.Model.PMode
+namespace Eu.EDelivery.AS4.Model.PMode;
+
+[Serializable]
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S3925:\"ISerializable\" should be implemented correctly", Justification = "<Pending>")]
+public class InvalidPModeException : Exception
 {
-    [Serializable]
-    public class InvalidPModeException : Exception
+    public InvalidPModeException() { }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="InvalidPModeException"/> class.
+    /// </summary>
+    public InvalidPModeException(string message)
+        : base(message)
     {
-        public InvalidPModeException() { }
+    }
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="InvalidPModeException"/> class.
-        /// </summary>
-        public InvalidPModeException(string message)
-            : base(message)
-        {
-        }
+    public InvalidPModeException(string message, ValidationResult validationResult) :
+        base(validationResult.AppendValidationErrorsToErrorMessage(message))
+    {
+    }
 
-        public InvalidPModeException(string message, ValidationResult validationResult) :
-            base(validationResult.AppendValidationErrorsToErrorMessage(message))
-        {
-        }
-
-        public InvalidPModeException(string message, Exception innerException)
-            : base(message, innerException)
-        {
-        }
+    public InvalidPModeException(string message, Exception innerException)
+        : base(message, innerException)
+    {
     }
 }

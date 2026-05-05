@@ -1,101 +1,53 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.Linq;
+﻿using Eu.EDelivery.AS4.Model.PMode;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
-namespace Eu.EDelivery.AS4.Strategies.Sender
+namespace Eu.EDelivery.AS4.Strategies.Sender;
+
+/// <summary>
+/// Class to provide <see cref="IDeliverSender" /> implementations
+/// based on a given condition
+/// </summary>
+internal class NotifySenderProvider : INotifySenderProvider
 {
+    private readonly ILogger<NotifySenderProvider> _logger;
+    private readonly IServiceProvider _serviceProvider;
+
     /// <summary>
-    /// Class to provide <see cref="IDeliverSender" /> implementations
-    /// based on a given condition
+    /// Initializes a new instance of the <see cref="NotifySenderProvider" /> class.
+    /// Create a new <see cref="NotifySenderProvider" />
+    /// to select the provide the right <see cref="INotifySender" /> implementation
     /// </summary>
-    public class NotifySenderProvider : INotifySenderProvider
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S6672:Generic logger injection should match enclosing type", Justification = "<Pending>")]
+    public NotifySenderProvider(ILogger<NotifySenderProvider> logger, IServiceProvider serviceProvider)
     {
-        public static readonly INotifySenderProvider Instance = new NotifySenderProvider();
-
-        private readonly ICollection<NotifySenderEntry> _senders;
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="NotifySenderProvider" /> class.
-        /// Create a new <see cref="NotifySenderProvider" />
-        /// to select the provide the right <see cref="INotifySender" /> implementation
-        /// </summary>
-        private NotifySenderProvider()
-        {
-            _senders = new Collection<NotifySenderEntry>();
-            this.Accept(s => StringComparer.OrdinalIgnoreCase.Equals(s, FileSender.Key), () => new FileSender());
-            this.Accept(s => StringComparer.OrdinalIgnoreCase.Equals(s, HttpSender.Key), () => new HttpSender());
-        }
-
-        /// <summary>
-        /// Accept a given <paramref name="sender" /> for a given <paramref name="condition" />
-        /// </summary>
-        /// <param name="condition"></param>
-        /// <param name="sender"></param>
-        public void Accept(Func<string, bool> condition, Func<INotifySender> sender)
-        {
-            if (condition == null)
-            {
-                throw new ArgumentNullException(nameof(condition));
-            }
-
-            if (sender == null)
-            {
-                throw new ArgumentNullException(nameof(sender));
-            }
-
-            _senders.Add(new NotifySenderEntry(condition, sender));
-        }
-
-        /// <summary>
-        /// Get the right <see cref="INotifySender" /> implementation
-        /// for a given <paramref name="operationMethod" />
-        /// </summary>
-        /// <param name="operationMethod"></param>  
-        /// <returns></returns>
-        public INotifySender GetNotifySender(string operationMethod)
-        {
-            if (operationMethod == null)
-            {
-                throw new ArgumentNullException(nameof(operationMethod));
-            }
-
-            NotifySenderEntry entry = _senders.FirstOrDefault(s => s.Condition(operationMethod));
-
-            if (entry?.Sender == null)
-            {
-                throw new KeyNotFoundException(
-                    $"No {nameof(INotifySender)} implementation found for Operation Method \'{operationMethod}\'. " +
-                    "Please check if the configuration in the Sending or Receiving PMode is correct");
-            }
-
-            return new ReliableSender(entry.Sender());
-        }
-
-        /// <summary>
-        /// Value Object to define a entry for the <see cref="INotifySender" />
-        /// </summary>
-        private class NotifySenderEntry
-        {
-            public NotifySenderEntry(Func<string, bool> condition, Func<INotifySender> sender)
-            {
-                Condition = condition;
-                Sender = sender;
-            }
-
-            public Func<string, bool> Condition { get; }
-
-            public Func<INotifySender> Sender { get; }
-        }
+        _logger = logger;
+        _serviceProvider = serviceProvider;
     }
 
     /// <summary>
-    /// Interface to define the <see cref="INotifySender" /> selection
+    /// Get the right <see cref="INotifySender" /> implementation
+    /// for a given <paramref name="notifyMethod" />
     /// </summary>
-    public interface INotifySenderProvider
+    /// <param name="notifyMethod"></param>  
+    /// <returns></returns>
+    public INotifySender GetNotifySender(Method notifyMethod)
     {
-        void Accept(Func<string, bool> condition, Func<INotifySender> sender);
+        if (string.IsNullOrWhiteSpace(notifyMethod.Type))
+        {
+            _logger.LogError("Cannot resolve type string: {TypeString} to a {Name} instance because the type string is blank",
+                notifyMethod.Type,
+                typeof(INotifySender).Name);
 
-        INotifySender GetNotifySender(string operationMethod);
+            throw new InvalidOperationException($"Cannot resolve type string: {notifyMethod.Type} to a {typeof(INotifySender).Name} instance because the type string is blank");
+        }
+
+        var sender = _serviceProvider.GetKeyedService<INotifySender>(notifyMethod.Type) ??
+            throw new InvalidOperationException($"Cannot resolve a valid {nameof(INotifySender)} implementation for key {notifyMethod.Type}");
+
+        sender.Configure(notifyMethod);
+
+        var logger = _serviceProvider.GetRequiredService<ILogger<ReliableNotifySender>>();
+        return new ReliableNotifySender(logger, sender);
     }
 }

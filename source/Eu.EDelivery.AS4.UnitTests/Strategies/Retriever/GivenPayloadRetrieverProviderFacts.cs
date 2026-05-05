@@ -1,51 +1,50 @@
-﻿using System;
-using System.Collections.Generic;
-using Eu.EDelivery.AS4.Model.Common;
+﻿using Eu.EDelivery.AS4.Model.Common;
 using Eu.EDelivery.AS4.Strategies.Retriever;
-using Xunit;
+using Eu.EDelivery.AS4.UnitTests.Common;
+using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
 
-namespace Eu.EDelivery.AS4.UnitTests.Strategies.Retriever
+namespace Eu.EDelivery.AS4.UnitTests.Strategies.Retriever;
+
+/// <summary>
+/// Testing <see cref="PayloadRetrieverProvider"/>
+/// </summary>
+public class GivenPayloadRetrieverProviderFacts
 {
-    /// <summary>
-    /// Testing <see cref="PayloadRetrieverProvider"/>
-    /// </summary>
-    public class GivenPayloadRetrieverProviderFacts
+    private readonly PayloadRetrieverProvider _sut;
+
+    public GivenPayloadRetrieverProviderFacts()
     {
-        public static IEnumerable<object[]> PayloadRetrievers
-        {
-            get
-            {
-                yield return new object[] { FilePayloadRetriever.Key, typeof(FilePayloadRetriever) };
-                yield return new object[] { FtpPayloadRetriever.Key, typeof(FtpPayloadRetriever) };
-                yield return new object[] { HttpPayloadRetriever.Key, typeof(HttpPayloadRetriever) };
-                yield return new object[] { TempFilePayloadRetriever.Key, typeof(TempFilePayloadRetriever) };
-            }
-        }
+        _sut = new(
+            new FilePayloadRetriever(NullLogger<FilePayloadRetriever>.Instance, StubConfig.Default),
+            new TempFilePayloadRetriever(NullLogger<TempFilePayloadRetriever>.Instance),
+            new HttpPayloadRetriever(Substitute.For<IRetrieverHttpClient>()));
+    }
+
+    [Theory]
+    [InlineData(FilePayloadRetriever.Key, typeof(FilePayloadRetriever))]
+    [InlineData(HttpPayloadRetriever.Key, typeof(HttpPayloadRetriever))]
+    [InlineData(TempFilePayloadRetriever.Key, typeof(TempFilePayloadRetriever))]
+    public void CanGetKnownPayloadRetriever(string key, Type expectedRetriever)
+    {
+        // Arrange
+        var payload = new Payload(location: $"{key}{Guid.NewGuid()}");
+
+        // Act
+        var actualRetriever = _sut.Get(payload);
+
+        // Assert
+        Assert.IsType(expectedRetriever, actualRetriever);
+    }
 
 
-        [Theory]
-        [MemberData(nameof(PayloadRetrievers))]
-        public void CanGetKnownPayloadRetriever(string key, Type expectedRetriever)
-        {
-            // Arrange
-            var payload = new Payload(location: $"{key}{Guid.NewGuid()}");
+    [Fact]
+    public void FailsToGetRetrieverIfNoRetrieverIsRegisteredForType()
+    {
+        // Arrange
+        var payload = new Payload(location: "unknownthing");
 
-            // Act
-            var actualRetriever = PayloadRetrieverProvider.Instance.Get(payload);
-
-            // Assert
-            Assert.IsType(expectedRetriever, actualRetriever);
-        }
-
-
-        [Fact]
-        public void FailsToGetRetriever_IfNoRetrieverIsRegisteredForType()
-        {
-            // Arrange
-            var payload = new Payload(location: "unknownthing");
-
-            // Act / Assert
-            Assert.ThrowsAny<Exception>(() => PayloadRetrieverProvider.Instance.Get(payload));
-        }
+        // Act / Assert
+        Assert.ThrowsAny<Exception>(() => _sut.Get(payload));
     }
 }

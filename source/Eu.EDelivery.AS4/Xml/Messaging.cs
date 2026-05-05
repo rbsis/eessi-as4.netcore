@@ -1,11 +1,10 @@
 ﻿using System.Xml.Serialization;
 
-namespace Eu.EDelivery.AS4.Xml
+namespace Eu.EDelivery.AS4.Xml;
+
+public partial class Messaging
 {
-    public partial class Messaging
-    {
-        [XmlElement("UserMessage", typeof(UserMessage))]
-        [XmlElement("SignalMessage", typeof(SignalMessage))]
-        public object[] MessageUnits { get; set; }
-    }
+    [XmlElement("UserMessage", typeof(UserMessage))]
+    [XmlElement("SignalMessage", typeof(SignalMessage))]
+    public object[]? MessageUnits { get; set; }
 }

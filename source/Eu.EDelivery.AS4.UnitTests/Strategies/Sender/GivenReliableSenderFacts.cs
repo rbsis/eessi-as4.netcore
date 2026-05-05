@@ -1,88 +1,87 @@
-﻿using System;
-using System.Linq;
-using System.Threading.Tasks;
-using Eu.EDelivery.AS4.Exceptions;
-using Eu.EDelivery.AS4.Model.Core;
+﻿using Eu.EDelivery.AS4.Entities;
 using Eu.EDelivery.AS4.Model.Deliver;
 using Eu.EDelivery.AS4.Model.Notify;
 using Eu.EDelivery.AS4.Strategies.Sender;
-using Xunit;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
-namespace Eu.EDelivery.AS4.UnitTests.Strategies.Sender
+namespace Eu.EDelivery.AS4.UnitTests.Strategies.Sender;
+
+/// <summary>
+/// Testing <see cref="ReliableSender" />
+/// </summary>
+public class GivenReliableSenderFacts
 {
-    /// <summary>
-    /// Testing <see cref="ReliableSender" />
-    /// </summary>
-    public class GivenReliableSenderFacts
+    private static readonly ILogger<ReliableDeliverSender> _reliableDeliverSenderLogger = NullLogger<ReliableDeliverSender>.Instance;
+    private static readonly ILogger<ReliableNotifySender> _reliableNotifySenderLogger = NullLogger<ReliableNotifySender>.Instance;
+
+    public class Configure
     {
-        public class Configure
+        [Fact]
+        public void SenderDelegatesConfigurationIfDeliverSender()
         {
-            [Fact]
-            public void SenderDelegatesConfiguration_IfDeliverSender()
-            {
-                // Arrange
-                var stubSender = new SpySender();
-                var sut = new ReliableSender(deliverSender: stubSender);
+            // Arrange
+            var stubSender = new SpySender();
+            var sut = new ReliableDeliverSender(_reliableDeliverSenderLogger, stubSender);
 
-                // Act
-                sut.Configure(method: null);
+            // Act
+            sut.Configure(new AS4.Model.PMode.Method());
 
-                // Assert
-                Assert.True(stubSender.IsConfigured);
-            }
-
-            [Fact]
-            public void SenderDelegatesConfiguration_IfNotifySender()
-            {
-                // Arrange
-                var stubSender = new SpySender();
-                var sut = new ReliableSender(notifySender: stubSender);
-
-                // Act
-                sut.Configure(method: null);
-
-                // Assert
-                Assert.True(stubSender.IsConfigured);
-            }
+            // Assert
+            Assert.True(stubSender.IsConfigured);
         }
 
-        public class Send
+        [Fact]
+        public void SenderDelegatesConfigurationIfNotifySender()
         {
-            [Fact]
-            public async Task SenderCatchesAndRetrowsAS4Exception_IfDeliverMessage()
-            {
-                // Arrange
-                var sut = new ReliableSender(deliverSender: new SaboteurSender());
+            // Arrange
+            var stubSender = new SpySender();
+            var sut = new ReliableNotifySender(_reliableNotifySenderLogger, stubSender);
 
-                // Act
-                SendResult r = await sut.SendAsync(DummyDeliverMessage());
+            // Act
+            sut.Configure(new AS4.Model.PMode.Method());
 
-                // Assert
-                Assert.Equal(SendResult.FatalFail, r);
-            }
+            // Assert
+            Assert.True(stubSender.IsConfigured);
+        }
+    }
 
-            private static DeliverMessageEnvelope DummyDeliverMessage()
-            {
-                return new DeliverMessageEnvelope(new DeliverMessage(), "", Enumerable.Empty<Attachment>());
-            }
+    public class Send
+    {
+        [Fact]
+        public async Task SenderCatchesAndRetrowsAS4ExceptionIfDeliverMessage()
+        {
+            // Arrange
+            var sut = new ReliableDeliverSender(_reliableDeliverSenderLogger, new SaboteurSender());
 
-            [Fact]
-            public async Task SenderCatchesAndRethrowsAS4Exception_IfNotifyMesage()
-            {
-                // Arrange
-                var sut = new ReliableSender(notifySender: new SaboteurSender());
+            // Act
+            var r = await sut.SendAsync(DummyDeliverMessage(), CancellationToken.None);
 
-                // Act
-                SendResult r = await sut.SendAsync(DummyNotifyMessage());
+            // Assert
+            Assert.Equal(SendResult.FatalFail, r);
+        }
 
-                // Assert
-                Assert.Equal(SendResult.FatalFail, r);
-            }
+        private static DeliverMessageEnvelope DummyDeliverMessage()
+        {
+            return new DeliverMessageEnvelope(new DeliverMessage(), "", []);
+        }
 
-            private static NotifyMessageEnvelope DummyNotifyMessage()
-            {
-                return new NotifyMessageEnvelope(null, default(Status), null, null, null);
-            }
+        [Fact]
+        public async Task SenderCatchesAndRethrowsAS4ExceptionIfNotifyMesage()
+        {
+            // Arrange
+            var sut = new ReliableNotifySender(_reliableNotifySenderLogger, new SaboteurSender());
+
+            // Act
+            var r = await sut.SendAsync(DummyNotifyMessage(), CancellationToken.None);
+
+            // Assert
+            Assert.Equal(SendResult.FatalFail, r);
+        }
+
+        private static NotifyMessageEnvelope DummyNotifyMessage()
+        {
+            return new NotifyMessageEnvelope(new MessageInfo(), default, [], "", typeof(InMessage));
         }
     }
 }

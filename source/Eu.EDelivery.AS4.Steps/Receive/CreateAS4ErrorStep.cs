@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Linq;
-using System.Threading.Tasks;
-using Eu.EDelivery.AS4.Common;
+﻿using System.ComponentModel;
 using Eu.EDelivery.AS4.Entities;
 using Eu.EDelivery.AS4.Exceptions;
 using Eu.EDelivery.AS4.Factories;
@@ -11,144 +6,132 @@ using Eu.EDelivery.AS4.Model.Core;
 using Eu.EDelivery.AS4.Model.Internal;
 using Eu.EDelivery.AS4.Model.PMode;
 using Eu.EDelivery.AS4.Repositories;
-using log4net;
+using Microsoft.Extensions.Logging;
 using Error = Eu.EDelivery.AS4.Model.Core.Error;
 using PullRequest = Eu.EDelivery.AS4.Model.Core.PullRequest;
 using SignalMessage = Eu.EDelivery.AS4.Model.Core.SignalMessage;
 using UserMessage = Eu.EDelivery.AS4.Model.Core.UserMessage;
 
-namespace Eu.EDelivery.AS4.Steps.Receive
+namespace Eu.EDelivery.AS4.Steps.Receive;
+
+[Info("Create an AS4 Error message")]
+[Description("Create an AS4 Error message to inform the sender that something went wrong processing the received AS4 message")]
+public class CreateAS4ErrorStep : IStep
 {
-    [Info("Create an AS4 Error message")]
-    [Description("Create an AS4 Error message to inform the sender that something went wrong processing the received AS4 message")]
-    public class CreateAS4ErrorStep : IStep
+    private readonly ILogger<CreateAS4ErrorStep> _logger;
+    private readonly IDatastoreRepository _repository;
+    private readonly IIdentifierFactory _identifierFactory;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="CreateAS4ErrorStep"/> class.
+    /// </summary>
+    public CreateAS4ErrorStep(ILogger<CreateAS4ErrorStep> logger, IDatastoreRepository repository, IIdentifierFactory identifierFactory)
     {
-        private readonly Func<DatastoreContext> _createDatastoreContext;
+        _logger = logger;
+        _identifierFactory = identifierFactory;
+        _repository = repository;
+    }
 
-        private static readonly ILog Logger = LogManager.GetLogger( System.Reflection.MethodBase.GetCurrentMethod().DeclaringType );
+    /// <summary>
+    /// Start creating <see cref="Error"/>
+    /// </summary>
+    /// <param name="messagingContext"></param>
+    /// <returns></returns>
+    /// <exception cref="System.Exception">A delegate callback throws an exception.</exception>
+    /// <param name="cancellation"></param>
+    public async Task<StepResult> ExecuteAsync(MessagingContext messagingContext, CancellationToken cancellation)
+    {
+        var asS4Message = messagingContext.AS4Message;
+        var errorResult = messagingContext.ErrorResult;
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="CreateAS4ErrorStep" /> class.
-        /// </summary>
-        public CreateAS4ErrorStep() : this(Registry.Instance.CreateDatastoreContext) { }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="CreateAS4ErrorStep"/> class.
-        /// </summary>
-        /// <param name="createDatastoreContext">Creates a new datastore context.</param>
-        public CreateAS4ErrorStep(Func<DatastoreContext> createDatastoreContext)
+        if (asS4Message == null)
         {
-            if (createDatastoreContext == null)
-            {
-                throw new ArgumentNullException(nameof(createDatastoreContext));
-            }
-
-            _createDatastoreContext = createDatastoreContext;
+            throw new InvalidOperationException(
+                $"{nameof(CreateAS4ErrorStep)} requires an AS4Message to create an Error but no AS4Message is present in the MessagingContext");
         }
 
-        /// <summary>
-        /// Start creating <see cref="Error"/>
-        /// </summary>
-        /// <param name="messagingContext"></param>
-        /// <returns></returns>
-        /// <exception cref="System.Exception">A delegate callback throws an exception.</exception>
-        public async Task<StepResult> ExecuteAsync(MessagingContext messagingContext)
+        if (asS4Message.IsEmpty && errorResult == null)
         {
-            if (messagingContext == null)
-            {
-                throw new ArgumentNullException(nameof(messagingContext));
-            }
-
-            if (messagingContext.AS4Message == null)
-            {
-                throw new InvalidOperationException(
-                    $"{nameof(CreateAS4ErrorStep)} requires an AS4Message to create an Error but no AS4Message is present in the MessagingContext");
-            }
-
-            if (messagingContext.AS4Message.IsEmpty && messagingContext?.ErrorResult == null)
-            {
-                Logger.Warn("Skip creating AS4 Error because AS4Message and ErrorResult is empty in the MessagingContext");
-                return await StepResult.SuccessAsync(messagingContext);
-            }
-
-            ErrorResult errorResult = messagingContext.ErrorResult;
-
-            AS4Message errorMessage = CreateAS4ErrorWithPossibleMultihop(received: messagingContext.AS4Message,
-                occurredError: errorResult);
-
-            if (errorResult != null)
-            {
-                Logger.Error($"AS4 Error(s) created with {Config.Encode(errorResult.Code.GetString())} {Config.Encode(errorResult.Alias)}, {Config.Encode(errorResult.Description)}");
-
-                await InsertInExceptionsForNowExceptionedInMessageAsync(
-                    messagingContext.AS4Message.SignalMessages,
-                    messagingContext.ErrorResult,
-                    messagingContext.ReceivingPMode);
-            }
-
-            messagingContext.ModifyContext(errorMessage);
-
-            if (Logger.IsInfoEnabled && errorMessage.MessageUnits.Any())
-            {
-                Logger.Info(
-                    $"{Config.Encode(messagingContext.LogTag)} {Config.Encode(errorMessage.MessageUnits.Count())} Error(s) has been created for received AS4 UserMessages");
-            }
-
+            _logger.LogWarning("Skip creating AS4 Error because AS4Message and ErrorResult is empty in the MessagingContext");
             return await StepResult.SuccessAsync(messagingContext);
         }
 
-        private static AS4Message CreateAS4ErrorWithPossibleMultihop(
-            AS4Message received,
-            ErrorResult occurredError)
+        var errorMessage = CreateAS4ErrorWithPossibleMultihop(
+            received: asS4Message,
+            occurredError: errorResult);
+
+        if (errorResult != null)
         {
-            Error ToError(UserMessage u)
-            {
-                return Error.CreateFor(IdentifierFactory.Instance.Create(), u, occurredError, received?.IsMultiHopMessage == true);
-            }
+            _logger.LogError("AS4 Error(s) created with {Code} {Alias}, {Description}",
+                errorResult.Code.GetString(),
+                errorResult.Alias,
+                errorResult.Description);
 
-            IEnumerable<Error> errors = received?.UserMessages.Select(ToError) ?? new Error[0];
-            AS4Message errorMessage = AS4Message.Create(errors);
-            errorMessage.SigningId = received?.SigningId;
-
-            return errorMessage;
+            await InsertInExceptionsForNowExceptionedInMessageAsync(
+                asS4Message.SignalMessages,
+                errorResult,
+                messagingContext.ReceivingPMode,
+                cancellation);
         }
 
-        private async Task InsertInExceptionsForNowExceptionedInMessageAsync(
-            IEnumerable<SignalMessage> signalMessages,
-            ErrorResult occurredError,
-            ReceivingProcessingMode receivePMode)
+        messagingContext.ModifyContext(errorMessage);
+
+        if (_logger.IsEnabled(LogLevel.Information) && errorMessage.MessageUnits.Any())
         {
-            if (signalMessages.Any() == false)
-            {
-                return;
-            }
-
-            using (DatastoreContext dbContext = _createDatastoreContext())
-            {
-                var repository = new DatastoreRepository(dbContext);
-
-                foreach (SignalMessage signal in signalMessages.Where(s => !(s is PullRequest)))
-                {
-                    var ex = InException.ForEbmsMessageId(signal.MessageId, occurredError.Description);
-                    await ex.SetPModeInformationAsync(receivePMode);
-
-                    Logger.Debug(
-                        $"Insert InException for {Config.Encode(signal.GetType().Name)} {Config.Encode(signal.MessageId)} with {{Exception={Config.Encode(occurredError.Description)}}}");
-
-                    repository.InsertInException(ex);
-                }
-
-                IEnumerable<string> ebmsMessageIds = signalMessages.Select(s => s.MessageId).ToArray();
-                repository.UpdateInMessages(
-                    m => ebmsMessageIds.Contains(m.EbmsMessageId),
-                    m =>
-                    {
-                        Logger.Debug($"Update {Config.Encode(m.EbmsMessageType)} InMessage {Config.Encode(m.EbmsMessageId)} Status=Exception");
-                        m.SetStatus(InStatus.Exception);
-                    });
-
-                await dbContext.SaveChangesAsync();
-            }
+            _logger.LogInformation("{LogTag} {Count} Error(s) has been created for received AS4 UserMessages",
+                messagingContext.LogTag,
+                errorMessage.MessageUnits.Count());
         }
+
+        return await StepResult.SuccessAsync(messagingContext);
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S1172:Unused method parameters should be removed", Justification = "<Pending>")]
+    private AS4Message CreateAS4ErrorWithPossibleMultihop(
+        AS4Message received,
+        ErrorResult? occurredError)
+    {
+        Error ToError(UserMessage u) => Error.CreateFor(_identifierFactory.Create(), u, occurredError, received?.IsMultiHopMessage == true);
+
+        var errors = received.UserMessages.Select(ToError) ?? [];
+        var errorMessage = AS4Message.Create(errors);
+        errorMessage.SigningId = received.SigningId;
+
+        return errorMessage;
+    }
+
+    private async Task InsertInExceptionsForNowExceptionedInMessageAsync(
+        IEnumerable<SignalMessage> signalMessages,
+        ErrorResult occurredError,
+        ReceivingProcessingMode? receivePMode,
+        CancellationToken cancellation)
+    {
+        if (!signalMessages.Any())
+        {
+            return;
+        }
+
+        //TODO: transaction
+        foreach (var signal in signalMessages.Where(s => s is not PullRequest))
+        {
+            var ex = InException.ForEbmsMessageId(signal.MessageId, occurredError.Description);
+            await ex.SetPModeInformationAsync(receivePMode, cancellation);
+
+            _logger.LogDebug("Insert InException for {Signal} {MessageId} with {{Exception={Description}}}",
+                signal.GetType().Name,
+                signal.MessageId,
+                occurredError.Description);
+
+            _repository.InsertInException(ex);
+        }
+
+        IEnumerable<string> ebmsMessageIds = signalMessages.Select(s => s.MessageId).ToArray();
+        _repository.UpdateInMessages(
+            m => ebmsMessageIds.Contains(m.EbmsMessageId),
+            m =>
+            {
+                _logger.LogDebug("Update {EbmsMessageType} InMessage {EbmsMessageId} Status=Exception", m.EbmsMessageType, m.EbmsMessageId);
+                m.SetStatus(InStatus.Exception);
+            });
     }
 }

@@ -1,64 +1,61 @@
-﻿using System.Collections.Generic;
-using Eu.EDelivery.AS4.Exceptions;
+﻿namespace Eu.EDelivery.AS4.Extensions;
 
-namespace Eu.EDelivery.AS4.Extensions
+/// <summary>
+/// Extensions class to help with <see cref="IDictionary{TKey,TValue}" /> implementations,
+/// provide standard CRUD operations
+/// </summary>
+public static class DictionaryExtensions
 {
     /// <summary>
-    /// Extensions class to help with <see cref="IDictionary{TKey,TValue}" /> implementations,
-    /// provide standard CRUD operations
+    /// Read a required property
     /// </summary>
-    public static class DictionaryExtensions
+    /// <typeparam name="TKey"></typeparam>
+    /// <typeparam name="TValue"></typeparam>
+    /// <param name="dictionary"></param>
+    /// <param name="key"></param>
+    /// <returns></returns>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Bug", "S2955:Generic parameters not constrained to reference types should not be compared to \"null\"", Justification = "<Pending>")]
+    public static TValue ReadMandatoryProperty<TKey, TValue>(this IDictionary<TKey, TValue> dictionary, TKey key)
     {
-        /// <summary>
-        /// Read a required property
-        /// </summary>
-        /// <typeparam name="TKey"></typeparam>
-        /// <typeparam name="TValue"></typeparam>
-        /// <param name="dictionary"></param>
-        /// <param name="key"></param>
-        /// <returns></returns>
-        public static TValue ReadMandatoryProperty<TKey, TValue>(this IDictionary<TKey, TValue> dictionary, TKey key)
+        if (!dictionary.TryGetValue(key, out var value))
         {
-            if (!dictionary.ContainsKey(key))
-            {
-                throw new KeyNotFoundException($"Dictionary doesn't contain key: {key}");
-            }
-
-            if (dictionary[key] == null)
-            {
-                throw new KeyNotFoundException($"Dictionary contains empty value for key: {key}");
-            }
-
-            return dictionary[key];
+            throw new KeyNotFoundException($"Dictionary doesn't contain key: {key}");
         }
 
-        /// <summary>
-        /// Read an optional property with provided default value
-        /// </summary>
-        /// <typeparam name="TKey"></typeparam>
-        /// <typeparam name="TValue"></typeparam>
-        /// <param name="dictionary"></param>
-        /// <param name="key"></param>
-        /// <param name="defaultValue"></param>
-        /// <returns></returns>
-        public static TValue ReadOptionalProperty<TKey, TValue>(
-            this IDictionary<TKey, TValue> dictionary,
-            TKey key,
-            TValue defaultValue)
+        if (value == null)
         {
-            return !dictionary.ContainsKey(key) ? defaultValue : dictionary[key];
+            throw new KeyNotFoundException($"Dictionary contains empty value for key: {key}");
         }
 
-        /// <summary>
-        /// Read an optional property with a empty string default value
-        /// </summary>
-        /// <typeparam name="TKey"></typeparam>
-        /// <param name="dictionary"></param>
-        /// <param name="key"></param>
-        /// <returns></returns>
-        public static string ReadOptionalProperty<TKey>(this IDictionary<TKey, string> dictionary, TKey key)
-        {
-            return dictionary.ReadOptionalProperty(key, string.Empty);
-        }
+        return value;
+    }
+
+    /// <summary>
+    /// Read an optional property with provided default value
+    /// </summary>
+    /// <typeparam name="TKey"></typeparam>
+    /// <typeparam name="TValue"></typeparam>
+    /// <param name="dictionary"></param>
+    /// <param name="key"></param>
+    /// <param name="defaultValue"></param>
+    /// <returns></returns>
+    public static TValue ReadOptionalProperty<TKey, TValue>(
+        this IDictionary<TKey, TValue> dictionary,
+        TKey key,
+        TValue defaultValue)
+    {
+        return !dictionary.TryGetValue(key, out var value) ? defaultValue : value;
+    }
+
+    /// <summary>
+    /// Read an optional property with a empty string default value
+    /// </summary>
+    /// <typeparam name="TKey"></typeparam>
+    /// <param name="dictionary"></param>
+    /// <param name="key"></param>
+    /// <returns></returns>
+    public static string ReadOptionalProperty<TKey>(this IDictionary<TKey, string> dictionary, TKey key)
+    {
+        return dictionary.ReadOptionalProperty(key, string.Empty);
     }
 }

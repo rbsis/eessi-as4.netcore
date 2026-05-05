@@ -1,8 +1,4 @@
-﻿using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Text;
 using Eu.EDelivery.AS4.Common;
 using Eu.EDelivery.AS4.Exceptions;
 using Eu.EDelivery.AS4.Model.Core;
@@ -13,128 +9,121 @@ using Eu.EDelivery.AS4.Transformers;
 using Eu.EDelivery.AS4.UnitTests.Common;
 using Eu.EDelivery.AS4.UnitTests.Extensions;
 using Eu.EDelivery.AS4.UnitTests.Streaming;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
-using Xunit;
 
-namespace Eu.EDelivery.AS4.UnitTests.Transformers
+namespace Eu.EDelivery.AS4.UnitTests.Transformers;
+
+public class GivenReceiveMessageTransformerFacts
 {
-    public class GivenReceiveMessageTransformerFacts
+    [Fact]
+    public async Task ThrowsInvalidMessageWhenIncomingStreamIsntAS4Message()
     {
-        [Fact]
-        public async Task Throws_InvalidMessage_When_Incoming_Stream_Isnt_AS4Message()
-        {
-            // Arrange
-            Stream str = new MemoryStream(
-                Encoding.UTF8.GetBytes(
-                    "<root>This is definitly not an AS4Message!</root>"));
+        // Arrange
+        Stream str = new MemoryStream(
+            Encoding.UTF8.GetBytes(
+                "<root>This is definitly not an AS4Message!</root>"));
 
-            var incoming = new ReceivedMessage(str, Constants.ContentTypes.Soap);
-            var sut = new ReceiveMessageTransformer(StubConfig.Default);
+        var incoming = new ReceivedMessage(str, Constants.ContentTypes.Soap);
+        var sut = new ReceiveMessageTransformer(NullLogger<ReceiveMessageTransformer>.Instance, StubConfig.Default, Default.IdentifierFactory, Default.SerializerProvider);
 
-            // Act / Assert
-            await Assert.ThrowsAsync<InvalidMessageException>(
-                () => sut.TransformAsync(incoming));
-        }
+        // Act / Assert
+        await Assert.ThrowsAsync<InvalidMessageException>(
+            () => sut.TransformAsync(incoming, CancellationToken.None));
+    }
 
-        [CustomProperty]
-        public void Throws_InvalidMessage_When_Receiving_SignalMessage_While_Having_A_ReceivingPMode_Configured(SignalMessage s)
-        {
-            // Arrange
-            AS4Message receipt = AS4Message.Create(s);
-            var incoming = new ReceivedMessage(receipt.ToStream(), Constants.ContentTypes.Soap);
+    [CustomProperty]
+    public void ThrowsInvalidMessageWhenReceivingSignalMessageWhileHavingAReceivingPModeConfigured(SignalMessage s)
+    {
+        // Arrange
+        var receipt = AS4Message.Create(s);
+        var incoming = new ReceivedMessage(receipt.ToStream(), Constants.ContentTypes.Soap);
 
-            var sut = new ReceiveMessageTransformer(StubConfig.Default);
-            sut.Configure(
-                new Dictionary<string, string>
-                    { [ReceiveMessageTransformer.ReceivingPModeKey] = "pmode-id" });
+        var sut = new ReceiveMessageTransformer(NullLogger<ReceiveMessageTransformer>.Instance, StubConfig.Default, Default.IdentifierFactory, Default.SerializerProvider);
+        sut.Configure(new Dictionary<string, string> { [ReceiveMessageTransformer.ReceivingPModeKey] = "pmode-id" });
 
-            // Act / Assert
-            Assert.Throws<InvalidMessageException>(
-                () => sut.TransformAsync(incoming).GetAwaiter().GetResult());
+        // Act / Assert
+        Assert.Throws<InvalidMessageException>(
+            () => sut.TransformAsync(incoming, CancellationToken.None).GetAwaiter().GetResult());
 
-        }
+    }
 
-        [Theory]
-        [InlineData(false)]
-        [InlineData(true)]
-        public async Task Wraps_Into_VirtualStream_If_Cant_Seek(bool canSeek)
-        {
-            // Arrange
-            var stub = new StubStream(canSeek, AS4Message.Empty.ToStream());
-            var sut = new ReceiveMessageTransformer(StubConfig.Default);
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WrapsIntoVirtualStreamIfCantSeek(bool canSeek)
+    {
+        // Arrange
+        var stub = new StubStream(canSeek, AS4Message.Empty.ToStream());
+        var sut = new ReceiveMessageTransformer(NullLogger<ReceiveMessageTransformer>.Instance, StubConfig.Default, Default.IdentifierFactory, Default.SerializerProvider);
 
-            // Act
-            MessagingContext result = await sut.TransformAsync(
-                new ReceivedMessage(stub, Constants.ContentTypes.Soap));
+        // Act
+        var result = await sut.TransformAsync(new ReceivedMessage(stub, Constants.ContentTypes.Soap), CancellationToken.None);
 
-            // Assert
-            Assert.True(
-                result.ReceivedMessage.UnderlyingStream is VirtualStream != canSeek, 
-                "Incoming stream isn't wrapped in 'VirtualStream'");
-        }
+        // Assert
+        Assert.NotNull(result.ReceivedMessage);
+        Assert.True(
+            result.ReceivedMessage.UnderlyingStream is VirtualStream != canSeek,
+            "Incoming stream isn't wrapped in 'VirtualStream'");
+    }
 
 
-        [Theory]
-        [InlineData("none-existing-id")]
-        [InlineData("")]
-        public async Task Returns_With_Error_PMode_Not_Found_When_ReceivePMode_Is_Not_Defined(string id)
-        {
-            // Arrange
-            var stub = new Mock<IConfig>();
-            stub.Setup(c => c.GetReceivingPModes())
-                .Returns(new[] { new ReceivingProcessingMode { Id = "existing-id" } });
+    [Theory]
+    [InlineData("none-existing-id")]
+    public async Task ReturnsWithErrorPModeNotFoundWhenReceivePModeIsNotDefined(string id)
+    {
+        // Arrange
+        var stub = new Mock<IConfig>();
+        stub.Setup(c => c.GetReceivingPModes())
+            .Returns([new ReceivingProcessingMode { Id = "existing-id" }]);
 
-            var sut = new ReceiveMessageTransformer(stub.Object);
-            sut.Configure(
-                new Dictionary<string, string>
-                    { [ReceiveMessageTransformer.ReceivingPModeKey] = id });
+        var sut = new ReceiveMessageTransformer(NullLogger<ReceiveMessageTransformer>.Instance, stub.Object, Default.IdentifierFactory, Default.SerializerProvider);
+        sut.Configure(
+            new Dictionary<string, string>
+            { [ReceiveMessageTransformer.ReceivingPModeKey] = id });
 
-            var msg = new ReceivedMessage(
-                AS4Message.Empty.ToStream(), 
-                Constants.ContentTypes.Soap);
+        var msg = new ReceivedMessage(
+            AS4Message.Empty.ToStream(),
+            Constants.ContentTypes.Soap);
 
-            // Act
-            MessagingContext actual = await sut.TransformAsync(msg);
+        // Act
+        var actual = await sut.TransformAsync(msg, CancellationToken.None);
 
-            // Assert
-            MessageUnit primaryMessageUnit = actual.AS4Message.MessageUnits.First();
-            Assert.IsType<Error>(primaryMessageUnit);
-            var error = (Error) primaryMessageUnit;
+        // Assert
+        var primaryMessageUnit = actual.AS4Message?.MessageUnits.First();
+        Assert.IsType<Error>(primaryMessageUnit);
+        var error = (Error)primaryMessageUnit;
 
-            Assert.Equal(
-                ErrorAlias.ProcessingModeMismatch, 
-                error.ErrorLines.First().ShortDescription);
-        }
+        Assert.Equal(
+            ErrorAlias.ProcessingModeMismatch,
+            error.ErrorLines.First().ShortDescription);
+    }
 
-        [Theory]
-        [InlineData("existing-id")]
-        [InlineData(null)]
-        public async Task Adds_ReceivePMode_When_PMode_Setting_Is_Defined(string id)
-        {
-            // Arrange
-            var stub = new Mock<IConfig>();
-            stub.Setup(c => c.GetReceivingPModes())
-                  .Returns(new[] { new ReceivingProcessingMode {Id = "existing-id" } });
+    [Theory]
+    [InlineData("existing-id")]
+    [InlineData(null)]
+    public async Task AddsReceivePModeWhenPModeSettingIsDefined(string? id)
+    {
+        // Arrange
+        var stub = new Mock<IConfig>();
+        stub.Setup(c => c.GetReceivingPModes())
+            .Returns([new ReceivingProcessingMode { Id = "existing-id" }]);
 
-            var sut = new ReceiveMessageTransformer(stub.Object);
-            sut.Configure(
-                new Dictionary<string, string>
-                    { [ReceiveMessageTransformer.ReceivingPModeKey] = null });
+        var sut = new ReceiveMessageTransformer(NullLogger<ReceiveMessageTransformer>.Instance, stub.Object, Default.IdentifierFactory, Default.SerializerProvider);
+        sut.Configure(
+            new Dictionary<string, string>
+            {
+                [ReceiveMessageTransformer.ReceivingPModeKey] = string.Empty
+            });
 
-            var msg = new ReceivedMessage(
-                AS4Message.Empty.ToStream(), 
-                Constants.ContentTypes.Soap);
+        var msg = new ReceivedMessage(AS4Message.Empty.ToStream(), Constants.ContentTypes.Soap);
 
-            // Act
-            MessagingContext result = await sut.TransformAsync(msg);
+        // Act
+        var result = await sut.TransformAsync(msg, CancellationToken.None);
 
-            // Assert
-            bool expectedNotConfiguredPMode = result.ReceivingPMode == null;
-            bool expectedConfiguredPMode = result.ReceivingPMode?.Id == id;
-            Assert.True(expectedNotConfiguredPMode || expectedConfiguredPMode);
-        }
+        // Assert
+        var expectedNotConfiguredPMode = result.ReceivingPMode == null;
+        var expectedConfiguredPMode = result.ReceivingPMode?.Id == id;
+        Assert.True(expectedNotConfiguredPMode || expectedConfiguredPMode);
     }
 }
-
-
-

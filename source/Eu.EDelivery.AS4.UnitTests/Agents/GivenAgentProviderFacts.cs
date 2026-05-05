@@ -1,90 +1,122 @@
-﻿using System;
-using System.Collections.Generic;
-    using System.Linq;
-using Eu.EDelivery.AS4.Agents;
-using Eu.EDelivery.AS4.Common;
-using Eu.EDelivery.AS4.ServiceHandler.Agents;
+﻿using Eu.EDelivery.AS4.Agents;
+using Eu.EDelivery.AS4.Entities;
+using Eu.EDelivery.AS4.Exceptions.Handlers;
+using Eu.EDelivery.AS4.Receivers;
+using Eu.EDelivery.AS4.Repositories;
+using Eu.EDelivery.AS4.ServiceHandler.Providers;
+using Eu.EDelivery.AS4.Services;
+using Eu.EDelivery.AS4.Services.Journal;
+using Eu.EDelivery.AS4.Steps;
+using Eu.EDelivery.AS4.Transformers;
 using Eu.EDelivery.AS4.UnitTests.Common;
 using FsCheck;
 using FsCheck.Xunit;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Newtonsoft.Json;
-using Xunit;
 
-namespace Eu.EDelivery.AS4.UnitTests.Agents
+namespace Eu.EDelivery.AS4.UnitTests.Agents;
+
+public class GivenAgentProviderFacts
 {
-    public class GivenAgentProviderFacts
+
+    [Fact]
+    public void ThrowsExceptionWhenBuildingAgents()
     {
-        [Fact]
-        public void ThrowsExceptionWhenBuildingAgents()
-        {
-            // Arrange
-            var expected = new Exception("ignored string");
-            var stubRegistry = new Mock<IRegistry>();
-            stubRegistry.SetupGet(r => r.IsInitialized)
-                        .Returns(true);
+        // Arrange
+        var stubRegistry = new Mock<IExceptionHandlerRegistry>();
+        stubRegistry.Setup(x => x.GetHandler(It.IsAny<AgentType>()))
+            .Returns(Default.LogExceptionHandler);
 
-            // Act / Assert
-            var actual = Assert.Throws<Exception>(
-                () => AgentProvider.BuildFromConfig(new SaboteurAgentConfig(expected), stubRegistry.Object));
+        var stubReceiverBuilder = new Mock<IReceiverBuilder>();
+        var stubTransformerBuilder = new Mock<ITransformerBuilder>();
 
-            Assert.Equal(expected, actual);
-        }
+        var expected = new Exception("ignored string");
 
-        [Fact]
-        public void AssembleAgentBaseClasses_IfTypeIsSpecified()
-        {
-            // Arrange
-            // Minder agents are being created and uses the registry
-            Registry.Instance.Initialize(StubConfig.Default);
-            var stubRegistry = new Mock<IRegistry>();
-            stubRegistry.SetupGet(r => r.IsInitialized)
-                        .Returns(true);
-            stubRegistry.SetupGet(r => r.CreateDatastoreContext)
-                        .Returns(() => (DatastoreContext) null);
+        // Act / Assert
+        var actual = Assert.Throws<Exception>(() => new AgentProvider(
+            NullLogger<AgentProvider>.Instance,
+            new SaboteurAgentConfig(expected),
+            stubRegistry.Object,
+            stubReceiverBuilder.Object,
+            stubTransformerBuilder.Object,
+            new ServiceCollection().BuildServiceProvider()));
 
-            var sut = AgentProvider.BuildFromConfig(new SingleAgentConfig(), stubRegistry.Object);
+        Assert.Equal(expected, actual);
+    }
 
-            // Act
-            IEnumerable<IAgent> agents = sut.GetAgents();
+    [Fact]
+    public void AssembleAgentBaseClassesIfTypeIsSpecified()
+    {
+        // Arrange
+        // Minder agents are being created and uses the registry
+        var stubRegistry = new Mock<IExceptionHandlerRegistry>();
+        stubRegistry.Setup(x => x.GetHandler(It.IsAny<AgentType>()))
+            .Returns(Default.LogExceptionHandler);
 
-            // Assert
-            Assert.NotEmpty(agents);
-        }
+        var stubReceiverBuilder = new Mock<IReceiverBuilder>();
+        var stubTransformerBuilder = new Mock<ITransformerBuilder>();
 
-        [Property]
-        public Property Default_Transformers_Are_Serializable(AgentType type)
-        {
-            // Arrange
-            TransformerConfigEntry expected = AgentProvider.GetDefaultTransformerForAgentType(type);
-            string json = JsonConvert.SerializeObject(expected);
+        var serviceProvider = new ServiceCollection()
+            .AddSingleton(typeof(ILogger<>), typeof(NullLogger<>))
+            .AddSingleton(new Mock<IDbContextFactory<DatastoreContext>>().Object)
+            .AddSingleton(new Mock<IDatastoreRepository>().Object)
+            .AddSingleton(new Mock<IInMessageService>().Object)
+            .AddSingleton(new Mock<IAS4MessageBodyStore>().Object)
+            .AddSingleton(new Mock<IStepBuilder>().Object)
+            .AddKeyedSingleton<IJournalLogger>(typeof(JournalDatastoreLogger), new Mock<IJournalLogger>().Object)
+            .AddAS4Receivers()
+            .BuildServiceProvider();
 
-            // Act
-            var actual = JsonConvert.DeserializeObject<TransformerConfigEntry>(json);
+        // Act
+        var sut = new AgentProvider(
+            NullLogger<AgentProvider>.Instance,
+            new SingleAgentConfig(),
+            stubRegistry.Object,
+            stubReceiverBuilder.Object,
+            stubTransformerBuilder.Object,
+            serviceProvider);
 
-            // Assert
-            bool sameDefault = expected.DefaultTransformer.Type == actual.DefaultTransformer.Type;
-            bool sameOthers = expected.OtherTransformers
-                .Zip(actual.OtherTransformers, (t1, t2) => t1.Type == t2.Type)
-                .All(x => x);
+        // Assert
+        Assert.NotEmpty(sut.Agents);
+    }
 
-            return sameDefault.ToProperty().And(sameOthers);
-        }
+    [Property]
+    public Property DefaultTransformersAreSerializable(AgentType type)
+    {
+        // Arrange
+        var expected = AgentProvider.GetDefaultTransformerForAgentType(type);
+        var json = JsonConvert.SerializeObject(expected);
 
-        [Fact]
-        public void RegistryContainsDefaultConfigurationForAllAgentTypes()
-        {
-            Assert.All(
-                Enum.GetValues(typeof(AgentType)).Cast<AgentType>(),
-                t => Assert.NotNull(AgentProvider.GetDefaultStepConfigurationForAgentType(t)));
-        }
+        // Act
+        var actual = JsonConvert.DeserializeObject<TransformerConfigEntry>(json);
 
-        [Fact]
-        public void RegistryContainsDefaultTransformerForAllAgentTypes()
-        {
-            Assert.All(
-                Enum.GetValues(typeof(AgentType)).Cast<AgentType>(),
-                t => Assert.NotNull(AgentProvider.GetDefaultTransformerForAgentType(t)));
-        }
+        // Assert
+        Assert.NotNull(actual);
+        var sameDefault = expected.DefaultTransformer.Type == actual.DefaultTransformer.Type;
+        var sameOthers = expected.OtherTransformers
+            .Zip(actual.OtherTransformers, (t1, t2) => t1.Type == t2.Type)
+            .All(x => x);
+
+        return sameDefault.ToProperty().And(sameOthers);
+    }
+
+    [Fact]
+    public void RegistryContainsDefaultConfigurationForAllAgentTypes()
+    {
+        Assert.All(
+            Enum.GetValues(typeof(AgentType)).Cast<AgentType>(),
+            t => Assert.NotNull(AgentProvider.GetDefaultStepConfigurationForAgentType(t)));
+    }
+
+    [Fact]
+    public void RegistryContainsDefaultTransformerForAllAgentTypes()
+    {
+        Assert.All(
+            Enum.GetValues(typeof(AgentType)).Cast<AgentType>(),
+            t => Assert.NotNull(AgentProvider.GetDefaultTransformerForAgentType(t)));
     }
 }

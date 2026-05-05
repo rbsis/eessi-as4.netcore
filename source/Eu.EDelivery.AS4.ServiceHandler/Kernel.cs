@@ -1,142 +1,94 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using Eu.EDelivery.AS4.Agents;
-using Eu.EDelivery.AS4.Common;
-using Eu.EDelivery.AS4.Extensions;
-using Eu.EDelivery.AS4.ServiceHandler.Agents;
-using log4net;
+﻿using Eu.EDelivery.AS4.Agents;
+using Eu.EDelivery.AS4.Entities;
+using Eu.EDelivery.AS4.ServiceHandler.Providers;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
-namespace Eu.EDelivery.AS4.ServiceHandler
+namespace Eu.EDelivery.AS4.ServiceHandler;
+
+/// <summary>
+/// Start point for AS4 Connection
+/// Wrapper for the Channels
+/// </summary>
+public sealed class Kernel : IDisposable
 {
+    private readonly ILogger<Kernel> _logger;
+    private readonly IEnumerable<IAgent> _agents;
+    private readonly IDbContextFactory<DatastoreContext> _contextFactory;
+    private bool _disposedValue;
+
     /// <summary>
-    /// Start point for AS4 Connection
-    /// Wrapper for the Channels
+    /// Initializes a new instance of the <see cref="Kernel" /> class.
     /// </summary>
-    public sealed class Kernel : IDisposable
+    /// <param name="logger"></param>
+    /// <param name="agentsProvider">The agents provider.</param>
+    /// <param name="contextFactory"></param>
+    public Kernel(
+        ILogger<Kernel> logger,
+        AgentProvider agentsProvider,
+        IDbContextFactory<DatastoreContext> contextFactory)
     {
-        private readonly IEnumerable<IAgent> _agents;
-        private readonly IConfig _config;
+        _logger = logger;
+        _agents = agentsProvider.Agents;
+        _contextFactory = contextFactory;
+    }
 
-        private static readonly ILog Logger = LogManager.GetLogger( System.Reflection.MethodBase.GetCurrentMethod().DeclaringType );
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="Kernel" /> class.
-        /// </summary>
-        /// <param name="agents">The agents.</param>
-        /// <param name="config">The configuration.</param>
-        internal Kernel(IEnumerable<IAgent> agents, IConfig config)
+    /// <summary>
+    /// Starting Kernel > starting all Agents
+    /// </summary>
+    /// <param name="cancellationToken">Cancel the Kernel if needed</param>
+    /// <returns></returns>
+    public async Task StartAsync(CancellationToken cancellationToken)
+    {
+        if (!_agents.Any())
         {
-            if (agents == null)
-            {
-                throw new ArgumentNullException(nameof(agents));
-            }
-
-            if (config == null)
-            {
-                throw new ArgumentNullException(nameof(config));
-            }
-
-            _agents = agents;
-            _config = config;
+            _logger.LogWarning("Will not start Kernel: no IAgent implementations has been set to the Kernel");
+            return;
         }
 
-        /// <summary>
-        /// Create an <see cref="Kernel" /> instance from a given settings file name.
-        /// </summary>
-        /// <param name="settings">The file name in the '.\config\' folder of the settings to use during the initialization (default: 'settings.xml').</param>
-        /// <returns></returns>
-        public static Kernel CreateFromSettings(string settings = @"config\settings.xml")
+        try
         {
-            if (string.IsNullOrWhiteSpace(settings))
-            {
-                throw new ArgumentException(
-                    @"Settings file name cannot be null or whitespace (default: 'settings.xml').", 
-                    nameof(settings));
-            }
+            using var context = _contextFactory.CreateDbContext();
+            await context.NativeCommands.CreateDatabaseAsync(cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogCritical(exception, "An error occured while migrating the database");
+            return;
 
-            Config config = Config.Instance;
-            Registry registry = Registry.Instance;
-
-            config.Initialize(settings);
-            if (!config.IsInitialized)
-            {
-                throw new InvalidOperationException(
-                    "Cannot create Kernel: couldn't correctly initialize the configuration");
-            }
-
-            registry.Initialize(config);
-            if (!registry.IsInitialized)
-            {
-                throw new InvalidOperationException(
-                    "Cannot create Kernel: couldn't correctly initialize the registry");
-            }
-
-            var agentProvider = AgentProvider.BuildFromConfig(config, registry);
-            return new Kernel(agentProvider.GetAgents(), config);
         }
 
-        /// <summary>
-        /// Starting Kernel > starting all Agents
-        /// </summary>
-        /// <param name="cancellationToken">Cancel the Kernel if needed</param>
-        /// <returns></returns>
-        public async Task StartAsync(CancellationToken cancellationToken)
-        {
-            if (!_agents.Any())
-            {
-                Logger.Warn("Will not start Kernel: no IAgent implementations has been set to the Kernel");
-                return;
-            }
+        _logger.LogTrace("Starting...");
+        var task = Task.WhenAll(_agents.Select(c => c.StartAsync(cancellationToken)).ToArray());
+        _logger.LogTrace("Started!");
 
-            try
+        await task;
+    }
+
+    private void Dispose(bool disposing)
+    {
+        if (!_disposedValue)
+        {
+            if (disposing)
             {
-                using (var context = new DatastoreContext(_config))
+                foreach (var agent in _agents)
                 {
-                    await context.NativeCommands.CreateDatabase();
+                    var disposableAgent = agent as IDisposable;
+                    disposableAgent?.Dispose();
                 }
             }
-            catch (Exception exception)
-            {
-                Logger.Fatal($"An error occured while migrating the database: {exception.Message}");
-                Logger.Trace(exception.StackTrace);
 
-                if (exception.InnerException != null)
-                {
-                    Logger.Fatal(exception.InnerException.Message);
-                    Logger.Trace(exception.InnerException.StackTrace);
-                }
-
-                return;
-
-            }
-
-            Logger.Trace("Starting...");
-            Task task = Task.WhenAll(_agents.Select(c => c.Start(cancellationToken)).ToArray());
-            Logger.Trace("Started!");
-
-            await task;
-
-            CloseAgents();
+            _disposedValue = true;
         }
+    }
 
-        /// <summary>
-        /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
-        /// </summary>
-        public void Dispose()
-        {
-            CloseAgents();
-        }
-
-        private void CloseAgents()
-        {
-            foreach (IAgent agent in _agents)
-            {
-                var disposableAgent = agent as IDisposable;
-                disposableAgent?.Dispose();
-            }
-        }
+    /// <summary>
+    /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
+    /// </summary>
+    public void Dispose()
+    {
+        // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
     }
 }

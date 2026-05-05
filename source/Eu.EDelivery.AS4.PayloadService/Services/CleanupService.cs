@@ -1,60 +1,39 @@
-﻿using System;
-using System.Reactive.Linq;
+﻿using System.Reactive.Linq;
 using System.Reactive.Threading.Tasks;
-using System.Threading;
 using Eu.EDelivery.AS4.PayloadService.Persistance;
-using NLog;
 
-namespace Eu.EDelivery.AS4.PayloadService.Services
+namespace Eu.EDelivery.AS4.PayloadService.Services;
+
+/// <summary>
+/// Service to run periodically to cleaning up the retired persisted payloads.
+/// </summary>
+public class CleanUpService : BackgroundService
 {
+    private readonly ILogger<CleanUpService> _logger;
+    private readonly IPayloadPersister _payloadPersister;
+    private readonly TimeSpan _retentionPeriod;
+
     /// <summary>
-    /// Service to run periodically to cleaning up the retired persisted payloads.
+    /// Initializes a new instance of the <see cref="CleanUpService" /> class.
     /// </summary>
-    public class CleanUpService
+    /// <param name="logger"></param>
+    /// <param name="payloadPersister">The payload persister.</param>
+    /// <param name="configuration"></param>
+    public CleanUpService(ILogger<CleanUpService> logger, IPayloadPersister payloadPersister, IConfiguration configuration)
     {
-        private static readonly ILogger Logger = LogManager.GetCurrentClassLogger();
-        private readonly IPayloadPersister _payloadPersister;
-        private readonly TimeSpan _retentionPeriod;
-        private readonly CancellationTokenSource __cancellation;
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="CleanUpService" /> class.
-        /// </summary>
-        /// <param name="payloadPersister">The payload persister.</param>
-        /// <param name="retentionPeriod">The retention period.</param>
-        public CleanUpService(IPayloadPersister payloadPersister, TimeSpan retentionPeriod)
-        {
-            _payloadPersister = payloadPersister;
-            _retentionPeriod = retentionPeriod;
-            
-            __cancellation = new CancellationTokenSource();
-        }
-
-        /// <summary>
-        /// Starts cleaning up payloads that are over the configured retention period.
-        /// </summary>
-        /// <returns></returns>
-        public void Start()
-        {
-            Observable
-                .Interval(TimeSpan.FromDays(1))
-                .StartWith(0)
-                .Do(_ =>
-                {
-                    _payloadPersister.CleanupPayloadsOlderThan(_retentionPeriod);
-                    Logger.Trace("Clean up payloads older than: "
-                                 + DateTimeOffset.UtcNow.Subtract(_retentionPeriod));
-                })
-                .Repeat()
-                .ToTask(__cancellation.Token);
-        }
-
-        /// <summary>
-        /// Stops cleaning up payloads periodically.
-        /// </summary>
-        public void Stop()
-        {
-            __cancellation.Cancel();
-        }
+        _logger = logger;
+        _payloadPersister = payloadPersister;
+        _retentionPeriod = TimeSpan.FromDays(configuration.GetValue("RetentionPeriod", defaultValue: 90));
     }
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken) => await Observable
+        .Interval(TimeSpan.FromDays(1))
+        .StartWith(0)
+        .Do(_ =>
+        {
+            _payloadPersister.CleanupPayloadsOlderThan(_retentionPeriod);
+            _logger.LogTrace("Clean up payloads older than: {RetentionPeriod}", DateTimeOffset.UtcNow.Subtract(_retentionPeriod));
+        })
+        .Repeat()
+        .ToTask(stoppingToken);
 }

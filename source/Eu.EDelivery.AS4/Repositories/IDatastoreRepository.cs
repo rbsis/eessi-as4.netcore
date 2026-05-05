@@ -1,230 +1,266 @@
-using System;
-using System.Collections.Generic;
-using System.Linq.Expressions;
+﻿using System.Linq.Expressions;
 using Eu.EDelivery.AS4.Entities;
+using Eu.EDelivery.AS4.Model.Core;
 
-namespace Eu.EDelivery.AS4.Repositories
+namespace Eu.EDelivery.AS4.Repositories;
+
+public interface IDatastoreRepository
 {
-    public interface IDatastoreRepository
-    {
-        #region InMessage functionality
+    #region InMessage functionality
 
-        /// <summary>
-        /// Inserts the in message.
-        /// </summary>
-        /// <param name="inMessage">The in message.</param>
-        void InsertInMessage(InMessage inMessage);
+    /// <summary>
+    /// Inserts the in message.
+    /// </summary>
+    /// <param name="inMessage">The in message.</param>
+    void InsertInMessage(InMessage inMessage);
 
 
-        /// <summary>
-        /// Verifies if there exists an InMessage that matches the given predicate.
-        /// </summary>
-        /// <param name="predicate">The predicate.</param>
-        /// <returns></returns>
-        bool InMessageExists(Expression<Func<InMessage, bool>> predicate);
+    /// <summary>
+    /// Verifies if there exists an InMessage that matches the given predicate.
+    /// </summary>
+    /// <param name="predicate">The predicate.</param>
+    /// <returns></returns>
+    bool InMessageExists(Expression<Func<InMessage, bool>> predicate);
 
-        /// <summary>
-        /// Select all the found 'EbmsMessageIds' in the given datastore.
-        /// </summary>
-        /// <param name="searchedMessageIds">Collection of 'EbmsMessageIds' to be search for.</param>
-        /// <returns></returns>
-        IEnumerable<string> SelectExistingInMessageIds(IEnumerable<string> searchedMessageIds);
+    /// <summary>
+    /// Select all the found 'EbmsMessageIds' in the given datastore.
+    /// </summary>
+    /// <param name="searchedMessageIds">Collection of 'EbmsMessageIds' to be search for.</param>
+    /// <returns></returns>
+    IEnumerable<string> SelectExistingInMessageIds(IEnumerable<string> searchedMessageIds);
 
-        /// <summary>
-        /// Search all the found 'RefToMessageIds' in the given datastore.
-        /// </summary>
-        /// <param name="searchedMessageIds"></param>
-        /// <returns></returns>
-        IEnumerable<string> SelectExistingRefInMessageIds(IEnumerable<string> searchedMessageIds);
+    /// <summary>
+    /// Search all the found 'RefToMessageIds' in the given datastore.
+    /// </summary>
+    /// <param name="searchedMessageIds"></param>
+    /// <returns></returns>
+    IEnumerable<string> SelectExistingInRefToMessageIds(IEnumerable<string> searchedMessageIds);
 
-        /// <summary>
-        /// Selects the in messages.
-        /// </summary>
-        /// <typeparam name="TResult">The type of the result.</typeparam>
-        /// <param name="messageId"></param>
-        /// <param name="selection">The selection.</param>
-        /// <returns></returns>
-        /// <exception cref="Exception">A delegate callback throws an exception.</exception>
-        TResult GetInMessageData<TResult>(string messageId, Expression<Func<InMessage, TResult>> selection);
+    /// <summary>
+    /// Retrieves information for a <see cref="InMessage"/> for a given <paramref name="messageId"/>.
+    /// </summary>
+    /// <typeparam name="TResult">The type of the result to return</typeparam>
+    /// <param name="messageId">The identifier to locate the <see cref="InMessage"/></param>
+    /// <param name="selection">The selector function to manipulate the <typeparamref name="TResult"/> type</param>
+    /// <returns></returns>
+    TResult? GetInMessageData<TResult>(long messageId, Expression<Func<InMessage, TResult>> selection);
 
-        /// <summary>
-        /// Retrieves information for specified InMessages.
-        /// </summary>
-        /// <typeparam name="TResult">The type of the result.</typeparam>
-        /// <param name="where">The where.</param>
-        /// <param name="selection">The selection.</param>
-        /// <returns></returns>
-        IEnumerable<TResult> GetInMessageData<TResult>(Expression<Func<InMessage, bool>> where, Expression<Func<InMessage, TResult>> selection);
+    /// <summary>
+    /// Selects the in messages.
+    /// </summary>
+    /// <typeparam name="TResult">The type of the result.</typeparam>
+    /// <param name="messageId"></param>
+    /// <param name="selection">The selection.</param>
+    /// <returns></returns>
+    /// <exception cref="Exception">A delegate callback throws an exception.</exception>
+    TResult? GetInMessageData<TResult>(string messageId, Expression<Func<InMessage, TResult>> selection);
 
-        /// <summary>
-        /// Selects some information of specified InMessages.
-        /// </summary>
-        /// <typeparam name="TResult"></typeparam>
-        /// <param name="messageIds"></param>
-        /// <param name="selection"></param>
-        /// <returns></returns>
-        IEnumerable<TResult> GetInMessagesData<TResult>(IEnumerable<string> messageIds, Expression<Func<InMessage, TResult>> selection);
+    /// <summary>
+    /// Retrieves information for specified InMessages.
+    /// </summary>
+    /// <typeparam name="TResult">The type of the result.</typeparam>
+    /// <param name="where">The where.</param>
+    /// <param name="selection">The selection.</param>
+    /// <returns></returns>
+    IEnumerable<TResult> GetInMessageData<TResult>(Expression<Func<InMessage, bool>> where, Expression<Func<InMessage, TResult>> selection);
 
-        /// <summary>
-        /// Updates a <see cref="InMessage"/> using a given <paramref name="update"/> function.
-        /// </summary>
-        /// <param name="id">The identifier to locate the <see cref="InMessage"/></param>
-        /// <param name="update">The update function to change the located <see cref="InMessage"/></param>
-        void UpdateInMessage(long id, Action<InMessage> update);
+    /// <summary>
+    /// Selects some information of specified InMessages.
+    /// </summary>
+    /// <typeparam name="TResult"></typeparam>
+    /// <param name="messageIds"></param>
+    /// <param name="selection"></param>
+    /// <returns></returns>
+    IEnumerable<TResult> GetInMessagesData<TResult>(IEnumerable<string> messageIds, Expression<Func<InMessage, TResult>> selection);
 
-        /// <summary>
-        /// Updates the in message.
-        /// </summary>
-        /// <param name="messageId">The message identifier.</param>
-        /// <param name="updateAction">The update action.</param>
-        void UpdateInMessage(string messageId, Action<InMessage> updateAction);
+    /// <summary>
+    /// Updates a <see cref="InMessage"/> using a given <paramref name="update"/> function.
+    /// </summary>
+    /// <param name="id">The identifier to locate the <see cref="InMessage"/></param>
+    /// <param name="update">The update function to change the located <see cref="InMessage"/></param>
+    void UpdateInMessage(long id, Action<InMessage> update);
+
+    /// <summary>
+    /// Updates the in message.
+    /// </summary>
+    /// <param name="messageId">The message identifier.</param>
+    /// <param name="updateAction">The update action.</param>
+    void UpdateInMessage(string? messageId, Action<InMessage> updateAction);
 
 
-        void UpdateInMessages(Expression<Func<InMessage, bool>> predicate, Action<InMessage> updateAction);
+    void UpdateInMessages(Expression<Func<InMessage, bool>> predicate, Action<InMessage> updateAction);
 
-        #endregion
+    #endregion
 
-        #region OutMessage functionality
+    #region OutMessage functionality
 
-        /// <summary>
-        /// Verifies if there exists an OutMessage that matches the given predicate.
-        /// </summary>
-        /// <param name="predicate"></param>
-        /// <returns></returns>
-        bool OutMessageExists(Expression<Func<OutMessage, bool>> predicate);
+    /// <summary>
+    /// Verifies if there exists an OutMessage that matches the given predicate.
+    /// </summary>
+    /// <param name="predicate"></param>
+    /// <returns></returns>
+    bool OutMessageExists(Expression<Func<OutMessage, bool>> predicate);
 
-        /// <summary>
-        /// Retrieves the data of the OutMessage that has the specified <paramref name="messageId"/>
-        /// </summary>
-        /// <typeparam name="TResult"></typeparam>
-        /// <param name="messageId"></param>
-        /// <param name="selection"></param>
-        /// <returns></returns>
-        TResult GetOutMessageData<TResult>(long messageId, Expression<Func<OutMessage, TResult>> selection);
+    /// <summary>
+    /// Retrieves the data of the OutMessage that has the specified <paramref name="messageId"/>
+    /// </summary>
+    /// <typeparam name="TResult"></typeparam>
+    /// <param name="messageId"></param>
+    /// <param name="selection"></param>
+    /// <returns></returns>
+    TResult? GetOutMessageData<TResult>(long messageId, Expression<Func<OutMessage, TResult>> selection);
 
-        /// <summary>
-        /// Gets the out message data.
-        /// </summary>
-        /// <typeparam name="TResult">The type of the result.</typeparam>
-        /// <param name="where">The where.</param>
-        /// <param name="selection">The selection.</param>
-        /// <returns></returns>
-        IEnumerable<TResult> GetOutMessageData<TResult>(Expression<Func<OutMessage, bool>> where, Expression<Func<OutMessage, TResult>> selection);
+    /// <summary>
+    /// Gets the out message data.
+    /// </summary>
+    /// <typeparam name="TResult">The type of the result.</typeparam>
+    /// <param name="where">The where.</param>
+    /// <param name="selection">The selection.</param>
+    /// <returns></returns>
+    IEnumerable<TResult> GetOutMessageData<TResult>(Expression<Func<OutMessage, bool>> where, Expression<Func<OutMessage, TResult>> selection);
 
-        /// <summary>
-        /// Inserts the out message.
-        /// </summary>
-        /// <param name="outMessage">The out message.</param>
-        void InsertOutMessage(OutMessage outMessage);
+    /// <summary>
+    /// Inserts the out message.
+    /// </summary>
+    /// <param name="outMessage">The out message.</param>
+    void InsertOutMessage(OutMessage outMessage);
 
-        /// <summary>
-        /// Updates the out message.
-        /// </summary>
-        /// <param name="outMessageId">The ID that uniquely identifies the OutMessage record that must be updated..</param>
-        /// <param name="updateAction">The update action.</param>
-        void UpdateOutMessage(long outMessageId, Action<OutMessage> updateAction);
+    /// <summary>
+    /// Updates the out message.
+    /// </summary>
+    /// <param name="outMessageId">The ID that uniquely identifies the OutMessage record that must be updated..</param>
+    /// <param name="updateAction">The update action.</param>
+    void UpdateOutMessage(long outMessageId, Action<OutMessage> updateAction);
 
-        void UpdateOutMessages(Expression<Func<OutMessage, bool>> predicate, Action<OutMessage> updateAction);
+    void UpdateOutMessages(Expression<Func<OutMessage, bool>> predicate, Action<OutMessage> updateAction);
 
-        #endregion
+    #endregion
 
-        #region InException functionality
+    #region InException functionality
 
-        /// <summary>
-        /// Retrieves information for a specified InException using a <paramref name="refToMessageId"/>.
-        /// </summary>
-        /// <typeparam name="TResult">The type of the result.</typeparam>
-        /// <param name="refToMessageId"></param>
-        /// <param name="selection">The selection.</param>
-        /// <returns></returns>
-        IEnumerable<TResult> GetInExceptionsData<TResult>(
-            string refToMessageId,
-            Expression<Func<InException, TResult>> selection);
+    /// <summary>
+    /// Retrieves information for a specified InException using a <paramref name="refToMessageId"/>.
+    /// </summary>
+    /// <typeparam name="TResult">The type of the result.</typeparam>
+    /// <param name="refToMessageId"></param>
+    /// <param name="selection">The selection.</param>
+    /// <returns></returns>
+    IEnumerable<TResult> GetInExceptionsData<TResult>(
+        string refToMessageId,
+        Expression<Func<InException, TResult>> selection);
 
-        /// <summary>
-        /// Inserts the in exception.
-        /// </summary>
-        /// <param name="inException">The in exception.</param>
-        void InsertInException(InException inException);
+    /// <summary>
+    /// Inserts the in exception.
+    /// </summary>
+    /// <param name="inException">The in exception.</param>
+    void InsertInException(InException inException);
 
-        /// <summary>
-        /// Updates a single <see cref="InException"/> for a given <paramref name="id"/>.
-        /// </summary>
-        /// <param name="id">The identifier to locate the <see cref="InException"/> entity</param>
-        /// <param name="update">The update function to change the <see cref="InException"/> entity</param>
-        void UpdateInException(long id, Action<InException> update);
+    /// <summary>
+    /// Updates a single <see cref="InException"/> for a given <paramref name="id"/>.
+    /// </summary>
+    /// <param name="id">The identifier to locate the <see cref="InException"/> entity</param>
+    /// <param name="update">The update function to change the <see cref="InException"/> entity</param>
+    void UpdateInException(long id, Action<InException> update);
 
-        /// <summary>
-        /// Updates the in exception.
-        /// </summary>
-        /// <param name="refToMessageId">The reference to message identifier.</param>
-        /// <param name="updateAction">The update action.</param>
-        void UpdateInException(string refToMessageId, Action<InException> updateAction);
+    /// <summary>
+    /// Updates the in exception.
+    /// </summary>
+    /// <param name="refToMessageId">The reference to message identifier.</param>
+    /// <param name="updateAction">The update action.</param>
+    void UpdateInException(string refToMessageId, Action<InException> updateAction);
 
-        #endregion
+    #endregion
 
-        #region OutException functionality
+    #region OutException functionality
 
-        /// <summary>
-        /// Retrieves information for a specified OutException using a <paramref name="refToMessageId"/>.
-        /// </summary>
-        /// <typeparam name="TResult">The type of the result.</typeparam>
-        /// <param name="refToMessageId"></param>
-        /// <param name="selection">The selection.</param>
-        /// <returns></returns>
-        IEnumerable<TResult> GetOutExceptionsData<TResult>(
-            string refToMessageId,
-            Expression<Func<OutException, TResult>> selection);
+    /// <summary>
+    /// Retrieves information for a specified OutException using a <paramref name="refToMessageId"/>.
+    /// </summary>
+    /// <typeparam name="TResult">The type of the result.</typeparam>
+    /// <param name="refToMessageId"></param>
+    /// <param name="selection">The selection.</param>
+    /// <returns></returns>
+    IEnumerable<TResult> GetOutExceptionsData<TResult>(
+        string refToMessageId,
+        Expression<Func<OutException, TResult>> selection);
 
-        /// <summary>
-        /// Inserts the out exception.
-        /// </summary>
-        /// <param name="outException">The out exception.</param>
-        void InsertOutException(OutException outException);
+    /// <summary>
+    /// Inserts the out exception.
+    /// </summary>
+    /// <param name="outException">The out exception.</param>
+    void InsertOutException(OutException outException);
 
-        /// <summary>
-        /// Updates a single <see cref="OutException"/> entity for given <paramref name="id"/>.
-        /// </summary>
-        /// <param name="id">The identifier to locate the <see cref="OutException"/> entity</param>
-        /// <param name="update">The update function to change the located <see cref="OutException"/> entity</param>
-        void UpdateOutException(long id, Action<OutException> update);
+    /// <summary>
+    /// Updates a single <see cref="OutException"/> entity for given <paramref name="id"/>.
+    /// </summary>
+    /// <param name="id">The identifier to locate the <see cref="OutException"/> entity</param>
+    /// <param name="update">The update function to change the located <see cref="OutException"/> entity</param>
+    void UpdateOutException(long id, Action<OutException> update);
 
-        /// <summary>
-        /// Updates the out exception.
-        /// </summary>
-        /// <param name="refToMessageId">The reference to message identifier.</param>
-        /// <param name="updateAction">The update action.</param>
-        void UpdateOutException(string refToMessageId, Action<OutException> updateAction);
+    /// <summary>
+    /// Updates the out exception.
+    /// </summary>
+    /// <param name="refToMessageId">The reference to message identifier.</param>
+    /// <param name="updateAction">The update action.</param>
+    void UpdateOutException(string refToMessageId, Action<OutException> updateAction);
 
-        #endregion
+    #endregion
 
-        #region RetryReliability related functionality
+    #region RetryReliability related functionality
 
-        /// <summary>
-        /// Gets a sequence of <see cref="RetryReliability"/> records based on a given <paramref name="predicate"/>,
-        /// using a <paramref name="selector"/> to manipulate to a <typeparamref name="TResult"/> type.
-        /// </summary>
-        /// <typeparam name="TResult"></typeparam>
-        /// <param name="predicate"></param>
-        /// <param name="selector"></param>
-        /// <returns></returns>
-        IEnumerable<TResult> GetRetryReliability<TResult>(
-            Expression<Func<RetryReliability, bool>> predicate,
-            Expression<Func<RetryReliability, TResult>> selector);
+    /// <summary>
+    /// Gets a sequence of <see cref="RetryReliability"/> records based on a given <paramref name="predicate"/>,
+    /// using a <paramref name="selector"/> to manipulate to a <typeparamref name="TResult"/> type.
+    /// </summary>
+    /// <typeparam name="TResult"></typeparam>
+    /// <param name="predicate"></param>
+    /// <param name="selector"></param>
+    /// <returns></returns>
+    IEnumerable<TResult> GetRetryReliability<TResult>(
+        Expression<Func<RetryReliability, bool>> predicate,
+        Expression<Func<RetryReliability, TResult>> selector);
 
-        /// <summary>
-        /// Inserts the retry reliability information referencing a <see cref="InMessage"/>.
-        /// </summary>
-        /// <param name="reliability">The <see cref="RetryReliability"/> entity to insert</param>
-        /// 
-        void InsertRetryReliability(RetryReliability reliability);
+    /// <summary>
+    /// Inserts the retry reliability information referencing a <see cref="InMessage"/>.
+    /// </summary>
+    /// <param name="reliability">The <see cref="RetryReliability"/> entity to insert</param>
+    /// 
+    void InsertRetryReliability(RetryReliability reliability);
 
-        /// <summary>
-        /// Inserts the retry reliability informations referencing <see cref="InMessage"/>'s.
-        /// </summary>
-        /// <param name="reliabilities">The <see cref="RetryReliability"/> entities to insert</param>
-        void InsertRetryReliabilities(IEnumerable<RetryReliability> reliabilities);
+    /// <summary>
+    /// Inserts the retry reliability informations referencing <see cref="InMessage"/>'s.
+    /// </summary>
+    /// <param name="reliabilities">The <see cref="RetryReliability"/> entities to insert</param>
+    void InsertRetryReliabilities(IEnumerable<RetryReliability> reliabilities);
 
-        #endregion
-    }
+    /// <summary>
+    /// Updates a single <see cref="RetryReliability"/> record for a given <paramref name="id"/>.
+    /// </summary>
+    /// <param name="id">The identifier to locate the <see cref="RetryReliability"/> record</param>
+    /// <param name="update">The update function to change the <see cref="RetryReliability"/> record</param>
+    void UpdateRetryReliability(long id, Action<RetryReliability> update);
+
+    /// <summary>
+    /// Retrieves information for a single <see cref="InException"/> for a given <paramref name="id"/>.
+    /// </summary>
+    /// <typeparam name="TResult">The type of result to return</typeparam>
+    /// <param name="id">The identifier to locate the <see cref="InException"/></param>
+    /// <param name="selector">The selector function to manipulate the <typeparamref name="TResult"/> type</param>
+    /// <returns></returns>
+    TResult? GetInExceptionData<TResult>(long id, Expression<Func<InException, TResult>> selector);
+
+    /// <summary>
+    /// Retrieves information for a single <see cref="OutException"/> entity for a given <paramref name="id"/>.
+    /// </summary>
+    /// <typeparam name="TResult">The type of result to return</typeparam>
+    /// <param name="id">The identifier to locate the <see cref="OutException"/> entity</param>
+    /// <param name="selector">The selector function to manipulate the <typeparamref name="TResult"/> type</param>
+    /// <returns></returns>s
+    TResult? GetOutExceptionData<TResult>(long id, Expression<Func<OutException, TResult>> selector);
+    SmpConfiguration? FindSmpResponseForToParty(Party party);
+    MessageEntity? GetInOrOutMessageEntityFor(string refToMessageId);
+    OutMessage? RetrieveUserMessageForPullRequest(PullRequest pullRequest);
+    Task InsertJournalsAsync(IEnumerable<Journal> entries, CancellationToken cancellation);
+
+    #endregion
 }

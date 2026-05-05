@@ -1,228 +1,135 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Eu.EDelivery.AS4.Agents;
-using Eu.EDelivery.AS4.Entities;
-using Eu.EDelivery.AS4.Exceptions;
+﻿using Eu.EDelivery.AS4.Exceptions;
 using Eu.EDelivery.AS4.Model.Internal;
 using Eu.EDelivery.AS4.Services.Journal;
-using log4net;
 
-namespace Eu.EDelivery.AS4.Steps
+namespace Eu.EDelivery.AS4.Steps;
+
+public class StepExecutioner : IStepExecutioner
 {
-    internal class StepExecutioner
+    private readonly IEnumerable<IStep> _normalPipeline;
+    private readonly IEnumerable<IStep> _errorPipeline;
+    private readonly IAgentExceptionHandler _exceptionHandler;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="StepExecutioner"/> class.
+    /// </summary>
+    /// <param name="normalPipeline">The configuration used to build <see cref="IStep"/> instances.</param>
+    /// <param name="errorPipeline"></param>
+    /// <param name="handler">The handler used to handle exceptions during the step executions.</param>
+    public StepExecutioner(
+        IEnumerable<IStep> normalPipeline,
+        IEnumerable<IStep> errorPipeline,
+        IAgentExceptionHandler handler)
     {
-        private static readonly ILog Logger = LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType); 
+        _normalPipeline = normalPipeline;
+        _errorPipeline = errorPipeline;
+        _exceptionHandler = handler;
+    }
 
-        private readonly (ConditionalStepConfig happyPath, ConditionalStepConfig unhappyPath) _conditionalPipeline;
-        private readonly StepConfiguration _stepConfiguration;
-        private readonly IAgentExceptionHandler _exceptionHandler;
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="StepExecutioner"/> class.
-        /// </summary>
-        /// <param name="steps">The configuration used to build <see cref="IStep"/> instances.</param>
-        /// <param name="handler">The handler used to handle exceptions during the step executions.</param>
-        public StepExecutioner(
-            StepConfiguration steps,
-            IAgentExceptionHandler handler)
+    /// <summary>
+    /// Run through all the configured steps using the given <paramref name="currentContext"/> as input.
+    /// </summary>
+    /// <param name="currentContext">The input that gets passed to the step pipeline.</param>
+    /// <returns>The result of the last-executed step from the normal or error pipeline if there hasn't been an exception occured.</returns>
+    /// <param name="cancellation"></param>
+    public async Task<StepResult> ExecuteStepsAsync(MessagingContext currentContext, CancellationToken cancellation)
+    {
+        if (!_normalPipeline.Any())
         {
-            if (steps == null)
-            {
-                throw new ArgumentNullException(nameof(steps));
-            }
-
-            if (handler == null)
-            {
-                throw new ArgumentNullException(nameof(handler));
-            }
-
-            _stepConfiguration = steps;
-            _exceptionHandler = handler;
+            return await StepResult.SuccessAsync(currentContext);
         }
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="StepExecutioner"/> class.
-        /// </summary>
-        /// <param name="conditionalSteps">The configuration used to build <see cref="IStep"/> instances.</param>
-        /// <param name="handler">The handler used to handle exceptions during the step executions.</param>
-        internal StepExecutioner(
-            (ConditionalStepConfig thenSteps, ConditionalStepConfig elseSteps) conditionalSteps, 
-            IAgentExceptionHandler handler)
+        var result = await StepResult.SuccessAsync(currentContext);
+
+        try
         {
-            if (conditionalSteps.thenSteps == null)
-            {
-                throw new ArgumentNullException(nameof(conditionalSteps.thenSteps));
-            }
+            result = await ExecuteStepsAsync(_normalPipeline, result, cancellation);
+        }
+        catch (Exception exception)
+        {
+            var handled =
+                await _exceptionHandler.HandleExecutionExceptionAsync(exception, currentContext, cancellation);
 
-            if (conditionalSteps.elseSteps == null)
-            {
-                throw new ArgumentNullException(nameof(conditionalSteps.elseSteps));
-            }
-
-            if (handler == null)
-            {
-                throw new ArgumentNullException(nameof(handler));
-            }
-
-            _conditionalPipeline = conditionalSteps;
-            _exceptionHandler = handler;
+            return await StepResult.FailedAsync(handled);
         }
 
-        /// <summary>
-        /// Run through all the configured steps using the given <paramref name="currentContext"/> as input.
-        /// </summary>
-        /// <param name="currentContext">The input that gets passed to the step pipeline.</param>
-        /// <returns>The result of the last-executed step from the normal or error pipeline if there hasn't been an exception occured.</returns>
-        public async Task<StepResult> ExecuteStepsAsync(MessagingContext currentContext)
+        try
         {
-            Logger.Info($"StepExecutioner->ExecuteStepsAsync : Call Started");
-            bool hasNoStepsConfigured = 
-                _conditionalPipeline.happyPath == null
-                && (_stepConfiguration.NormalPipeline.Any(s => s == null) 
-                    || _stepConfiguration.NormalPipeline == null);
-
-            if (hasNoStepsConfigured)
+            if (!result.Succeeded && _errorPipeline.Any() && result.MessagingContext.Exception == null)
             {
-                return StepResult.Success(currentContext);
+                result = await ExecuteStepsAsync(_errorPipeline, result, cancellation);
             }
 
-            StepResult result = StepResult.Success(currentContext);
+            return result;
+        }
+        catch (Exception exception)
+        {
+            var handled = await _exceptionHandler.HandleErrorExceptionAsync(exception, result.MessagingContext, cancellation);
 
-            try
+            return await StepResult.FailedAsync(handled);
+        }
+    }
+
+    private static async Task<StepResult> ExecuteStepsAsync(
+        IEnumerable<IStep> steps,
+        StepResult initialResult,
+        CancellationToken cancellation)
+    {
+        var lastResult = initialResult;
+        var currentContext = lastResult.MessagingContext;
+        var journals = lastResult.Journal.ToList();
+
+        foreach (var step in steps)
+        {
+            var nextResult = await ExecuteStepAsync(currentContext, step, cancellation);
+
+            AddOrUpdateJournal(journals, nextResult);
+
+            if (!nextResult.CanProceed || !nextResult.Succeeded || nextResult.MessagingContext.Exception != null)
             {
-                IEnumerable<IStep> steps = CreateSteps(_stepConfiguration?.NormalPipeline, _conditionalPipeline.happyPath);
-                result = await ExecuteStepsAsync(steps, result);
+                return nextResult.WithJournal(journals);
             }
-            catch (Exception exception)
+
+            if (nextResult.MessagingContext != null && currentContext != nextResult.MessagingContext)
             {
-                MessagingContext handled = 
-                    await _exceptionHandler.HandleExecutionException(exception, currentContext);
-
-                return StepResult.Failed(handled);
+                currentContext = nextResult.MessagingContext;
             }
 
-            try
-            {
-                bool weHaveAnyUnhappyPath = 
-                    _stepConfiguration?.ErrorPipeline != null 
-                    || _conditionalPipeline.unhappyPath != null;
-
-                if (result.Succeeded == false 
-                    && result.CanProceed
-                    && weHaveAnyUnhappyPath 
-                    && result.MessagingContext.Exception == null)
-                {
-                    IEnumerable<IStep> steps = CreateSteps(_stepConfiguration?.ErrorPipeline, _conditionalPipeline.unhappyPath);
-                    result = await ExecuteStepsAsync(steps, result);
-                }
-
-                Logger.Info($"StepExecutioner->ExecuteStepsAsync : Call End");
-                return result;
-            }
-            catch (Exception exception)
-            {
-                MessagingContext handled = 
-                    await _exceptionHandler.HandleErrorException(exception, result.MessagingContext);
-
-                return StepResult.Failed(handled);
-            }
+            lastResult = nextResult;
         }
 
-        private static IEnumerable<IStep> CreateSteps(Step[] pipeline, ConditionalStepConfig conditionalConfig)
+        return lastResult.WithJournal(journals);
+    }
+
+    private static void AddOrUpdateJournal(ICollection<JournalLogEntry> journals, StepResult nextResult)
+    {
+        foreach (var entry in nextResult.Journal)
         {
-            if (pipeline != null)
+            var existed = journals.FirstOrDefault(j => JournalLogEntryComparer.ByEbmsMessageId.Equals(j, entry));
+
+            if (existed != null)
             {
-                return StepBuilder.FromSettings(pipeline).BuildSteps();
+                existed.AddLogEntries(entry.LogEntries);
             }
-
-            if (conditionalConfig != null)
+            else
             {
-                return StepBuilder.FromConditionalConfig(conditionalConfig).BuildSteps();
-            }
-
-            return Enumerable.Empty<IStep>();
-        }
-
-        private static async Task<StepResult> ExecuteStepsAsync(
-            IEnumerable<IStep> steps,
-            StepResult initialResult)
-        {
-            Logger.Info($"StepExecutioner->ExecuteStepsAsync->ExecuteStepsAsync : Call Started");
-            StepResult lastResult = initialResult;
-            MessagingContext currentContext = lastResult.MessagingContext;
-
-            ICollection<JournalLogEntry> journal = lastResult.Journal.ToList();
-
-            foreach (IStep step in steps)
-            {
-                StepResult nextResult = await ExecuteStepAsync(currentContext, step);
-
-                AddOrUpdateJournal(journal, nextResult);
-
-                if (nextResult.CanProceed == false
-                    || nextResult.Succeeded == false
-                    || nextResult.MessagingContext.Exception != null)
-                {
-                    return nextResult.WithJournal(journal);
-                }
-
-                if (nextResult.MessagingContext != null 
-                    && currentContext != nextResult.MessagingContext)
-                {
-                    currentContext = nextResult.MessagingContext;
-                }
-
-                lastResult = nextResult;
-            }
-
-            return lastResult.WithJournal(journal);
-        }
-
-        private static void AddOrUpdateJournal(ICollection<JournalLogEntry> journal, StepResult nextResult)
-        {
-            foreach (JournalLogEntry entry in nextResult.Journal)
-            {
-                JournalLogEntry existed =
-                    journal.FirstOrDefault(j => JournalLogEntryComparer.ByEbmsMessageId.Equals(j, entry));
-
-                if (existed != null)
-                {
-                    existed.AddLogEntries(entry.LogEntries);
-                }
-                else
-                {
-                    journal.Add(entry);
-                }
+                journals.Add(entry);
             }
         }
+    }
 
-        private static async Task<StepResult> ExecuteStepAsync(MessagingContext currentContext, IStep step)
+    private static async Task<StepResult> ExecuteStepAsync(MessagingContext currentContext, IStep step, CancellationToken cancellation)
+    {
+        var executeAsync = step.ExecuteAsync(currentContext, cancellation) ?? throw new InvalidOperationException(
+                $"Asynchronous result of step: {step.GetType().Name} returns 'null'");
+        var nextResult = await executeAsync ?? throw new InvalidOperationException(
+                $"Result of step: {step.GetType().Name} returns 'null'");
+        if (nextResult.MessagingContext == null)
         {
-            Logger.Info($"ExecuteStepsAsync-> : Step Execution Started");
-            Task<StepResult> executeAsync = step.ExecuteAsync(currentContext);
-            if (executeAsync == null)
-            {
-                throw new InvalidOperationException(
-                    $"Asynchronous result of step: {step.GetType().Name} returns 'null'");
-            }
-
-            StepResult nextResult = await executeAsync.ConfigureAwait(false);
-
-            if (nextResult == null)
-            {
-                throw new InvalidOperationException(
-                    $"Result of step: {step.GetType().Name} returns 'null'");
-            }
-
-            if (nextResult.MessagingContext == null)
-            {
-                throw new InvalidOperationException(
-                    $"Result of step {step.GetType().Name} doesn't have a '{nameof(MessagingContext)}'");
-            }
-
-            return nextResult;
+            throw new InvalidOperationException(
+                $"Result of step {step.GetType().Name} doesn't have a '{nameof(MessagingContext)}'");
         }
+
+        return nextResult;
     }
 }

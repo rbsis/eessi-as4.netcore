@@ -1,48 +1,47 @@
-﻿using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using Eu.EDelivery.AS4.Common;
-using Eu.EDelivery.AS4.Extensions;
-using Eu.EDelivery.AS4.Steps.Receive.Rules;
-using log4net;
+﻿using Eu.EDelivery.AS4.Steps.Receive.Rules;
+using Microsoft.Extensions.Logging;
 
-namespace Eu.EDelivery.AS4.Steps.Receive.Participant
+namespace Eu.EDelivery.AS4.Steps.Receive.Participant;
+
+/// <summary>
+/// Class to Provide <see cref="IPModeRule" /> implementations
+/// </summary>
+internal class PModeRuleEngine : IPModeRuleEngine
 {
-    /// <summary>
-    /// Class to Provide <see cref="IPModeRule" /> implementations
-    /// </summary>
-    internal static class PModeRuleEngine
+    private readonly ILogger<PModeRuleEngine> _logger;
+
+    public PModeRuleEngine(ILogger<PModeRuleEngine> logger)
     {
-        private static readonly ILog Logger = LogManager.GetLogger( System.Reflection.MethodBase.GetCurrentMethod().DeclaringType );
-        private static readonly ICollection<IPModeRule> Rules;
+        _logger = logger;
+    }
 
-        static PModeRuleEngine()
+    private static readonly ICollection<IPModeRule> _rules =
+    [
+        new PModeIdRule(),
+        new PModePartyInfoRule(),
+        new PModeUndefinedPartyInfoRule(),
+        new PModeAgreementRefRule(),
+        new PModeServiceActionRule()
+    ];
+
+    /// <summary>
+    /// Visits the <see cref="PModeParticipant" />:
+    /// apply Rules on the Participant
+    /// </summary>
+    /// <param name="participant"></param>
+    public PModeParticipant ApplyRules(PModeParticipant participant)
+    {
+        foreach (var rule in _rules)
         {
-            Rules = new Collection<IPModeRule>
-            {
-                new PModeIdRule(),
-                new PModePartyInfoRule(),
-                new PModeUndefinedPartyInfoRule(),
-                new PModeAgreementRefRule(),
-                new PModeServiceActionRule()
-            };
+            var points = rule.DeterminePoints(participant.PMode, participant.UserMessage);
+            _logger.LogTrace("PMode {PModeId}: {Points} Points determined for the {Rule}",
+                participant.PMode.Id,
+                points,
+                rule.GetType().Name);
+
+            participant.Points += points;
         }
 
-        /// <summary>
-        /// Visits the <see cref="PModeParticipant" />:
-        /// apply Rules on the Participant
-        /// </summary>
-        /// <param name="participant"></param>
-        public static PModeParticipant ApplyRules(PModeParticipant participant)
-        {
-            foreach (IPModeRule rule in Rules)
-            {
-                int points = rule.DeterminePoints(participant.PMode, participant.UserMessage);
-                Logger.Trace($"PMode {Config.Encode(participant.PMode.Id)}: {Config.Encode(points)} Points determined for the {Config.Encode(rule.GetType().Name)}");
-
-                participant.Points += points;
-            }
-
-            return participant;
-        }
-    }  
+        return participant;
+    }
 }

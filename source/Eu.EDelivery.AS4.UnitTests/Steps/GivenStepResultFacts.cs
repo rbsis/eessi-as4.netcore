@@ -1,43 +1,41 @@
 ﻿using Eu.EDelivery.AS4.Model.Core;
 using Eu.EDelivery.AS4.Model.Internal;
 using Eu.EDelivery.AS4.Steps;
-using Xunit;
 
-namespace Eu.EDelivery.AS4.UnitTests.Steps
+namespace Eu.EDelivery.AS4.UnitTests.Steps;
+
+/// <summary>
+/// Testing <see cref="StepResult" />
+/// </summary>
+public class GivenStepResultFacts
 {
-    /// <summary>
-    /// Testing <see cref="StepResult" />
-    /// </summary>
-    public class GivenStepResultFacts
+    public class CanProceed
     {
-        public class CanProceed
+        [Fact]
+        public void IsFalseIfStopExecutionIsCalled()
         {
-            [Fact]
-            public void IsFalseIfStopExecutionIsCalled()
-            {
-                // Act
-                StepResult actualStepResult = StepResult.Failed(new MessagingContext(AS4Message.Empty, MessagingContextMode.Send)).AndStopExecution();
+            // Act
+            var actualStepResult = StepResult.Failed(new MessagingContext(AS4Message.Empty, MessagingContextMode.Send)).AndStopExecution();
 
-                // Assert
-                Assert.False(actualStepResult.CanProceed);
-                Assert.False(actualStepResult.Succeeded);
-            }
+            // Assert
+            Assert.False(actualStepResult.CanProceed);
+            Assert.False(actualStepResult.Succeeded);
+        }
 
-            [Fact]
-            public void IsTrueIfStopExecutiongIsntCalled()
-            {
-                // Act
-                StepResult actualStepResult = StepResult.Success(AnonymousMessage());
+        [Fact]
+        public void IsTrueIfStopExecutiongIsntCalled()
+        {
+            // Act
+            var actualStepResult = StepResult.Success(AnonymousMessage());
 
-                // Assert
-                Assert.True(actualStepResult.CanProceed);
-                Assert.True(actualStepResult.Succeeded);
-            }
+            // Assert
+            Assert.True(actualStepResult.CanProceed);
+            Assert.True(actualStepResult.Succeeded);
+        }
 
-            private static MessagingContext AnonymousMessage()
-            {
-                return new MessagingContext(AS4Message.Empty, MessagingContextMode.Unknown);
-            }
+        private static MessagingContext AnonymousMessage()
+        {
+            return new MessagingContext(AS4Message.Empty, MessagingContextMode.Unknown);
         }
     }
 }

@@ -1,37 +1,35 @@
-﻿using System;
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace Eu.EDelivery.AS4.Model.PMode
+namespace Eu.EDelivery.AS4.Model.PMode;
+
+public class MessageHandlingConverter : JsonConverter
 {
-    public class MessageHandlingConverter : JsonConverter
+    public override bool CanWrite => false;
+
+    public override bool CanConvert(Type objectType)
     {
-        public override bool CanWrite => false;
+        return true;
+    }
 
-        public override bool CanConvert(Type objectType)
+    public override object? ReadJson(JsonReader reader, Type objectType, object? existingValue, JsonSerializer serializer)
+    {
+        var result = JObject.Load(reader);
+        if (result["sendingPMode"] != null)
         {
-            return true;
+            return result.ToObject<Forward>();
         }
 
-        public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
+        else if (result["isEnabled"] != null)
         {
-            var result = JObject.Load(reader);
-            if (result["sendingPMode"] != null)
-            {
-                return result.ToObject<Forward>();
-            }
-
-            else if (result["isEnabled"] != null)
-            {
-                return result.ToObject<Deliver>();
-            }
-
-            return null;
+            return result.ToObject<Deliver>();
         }
 
-        public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
-        {
-            throw new NotImplementedException();
-        }
+        return null;
+    }
+
+    public override void WriteJson(JsonWriter writer, object? value, JsonSerializer serializer)
+    {
+        throw new NotImplementedException();
     }
 }

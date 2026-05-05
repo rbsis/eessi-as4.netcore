@@ -1,97 +1,98 @@
-﻿using System;
-using System.IO;
+﻿namespace Eu.EDelivery.AS4.Model.Internal;
 
-namespace Eu.EDelivery.AS4.Model.Internal
+/// <summary>
+/// Canonical Return Message when the <see cref="Receivers.IReceiver" />  implementation has received a Message
+/// </summary>
+public class ReceivedMessage
 {
     /// <summary>
-    /// Canonical Return Message when the <see cref="Receivers.IReceiver" />  implementation has received a Message
+    /// Initializes a new instance of the <see cref="ReceivedMessage" /> class.
     /// </summary>
-    public class ReceivedMessage
+    /// <param name="underlyingStream"> </param>
+    public ReceivedMessage(Stream underlyingStream)
+        : this(underlyingStream, "application/octet-stream") { }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ReceivedMessage" /> class.
+    /// and Processing Mode
+    /// </summary>
+    /// <param name="underlyingStream"> </param>
+    /// <param name="contentType"> </param>
+    public ReceivedMessage(Stream underlyingStream, string contentType)
+        : this(underlyingStream, contentType, origin: "unknown origin") { }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ReceivedMessage"/> class.
+    /// </summary>
+    /// <param name="underlyingStream"></param>
+    /// <param name="contentType"></param>
+    /// <param name="origin"></param>
+    public ReceivedMessage(Stream underlyingStream, string contentType, string origin)
+        : this(underlyingStream, contentType, origin, length: -1) { }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ReceivedMessage"/> class.
+    /// </summary>
+    /// <param name="underlyingStream"></param>
+    /// <param name="contentType"></param>
+    /// <param name="origin"></param>
+    /// <param name="length"></param>
+    public ReceivedMessage(
+        Stream underlyingStream,
+        string contentType,
+        string origin,
+        long length)
     {
-        /// <summary>
-        /// Initializes a new instance of the <see cref="ReceivedMessage" /> class.
-        /// </summary>
-        /// <param name="underlyingStream"> </param>
-        public ReceivedMessage(Stream underlyingStream) 
-            : this(underlyingStream, "application/octet-stream") { }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="ReceivedMessage" /> class.
-        /// and Processing Mode
-        /// </summary>
-        /// <param name="underlyingStream"> </param>
-        /// <param name="contentType"> </param>
-        public ReceivedMessage(Stream underlyingStream, string contentType) 
-            : this(underlyingStream, contentType, origin: "unknown origin") { }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="ReceivedMessage"/> class.
-        /// </summary>
-        /// <param name="underlyingStream"></param>
-        /// <param name="contentType"></param>
-        /// <param name="origin"></param>
-        public ReceivedMessage(Stream underlyingStream, string contentType, string origin) 
-            : this(underlyingStream, contentType, origin, length: -1) { }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="ReceivedMessage"/> class.
-        /// </summary>
-        /// <param name="underlyingStream"></param>
-        /// <param name="contentType"></param>
-        /// <param name="origin"></param>
-        /// <param name="length"></param>
-        public ReceivedMessage(
-            Stream underlyingStream,
-            string contentType,
-            string origin,
-            long length)
+        if (length < -1)
         {
-            if (contentType == null)
-            {
-                throw new ArgumentNullException(nameof(contentType));
-            }
-
-            if (underlyingStream == null)
-            {
-                throw new ArgumentNullException(nameof(underlyingStream));
-            }
-
-            if (origin == null)
-            {
-                throw new ArgumentNullException(nameof(origin));
-            }
-
-            if (length < -1)
-            {
-                throw new ArgumentOutOfRangeException(nameof(length));
-            }
-
-            ContentType = contentType;
-            UnderlyingStream = underlyingStream;
-            Origin = origin;
-            Length = length;
+            throw new ArgumentOutOfRangeException(nameof(length));
         }
 
-        /// <summary>
-        /// Gets the type of the received contents.
-        /// </summary>
-        public string ContentType { get; }
-
-        /// <summary>
-        /// Gets the original underlying content stream.
-        /// </summary>
-        public Stream UnderlyingStream { get; }
-
-        /// <summary>
-        /// Gets the origin from where the the content stream comes from (when not set: 'unknown origin').
-        /// </summary>
-        /// <remarks>This could be 'unknown origin'</remarks>
-        public string Origin { get; }
-
-        /// <summary>
-        /// Gets the length of the contents stream (when not set: -1)
-        /// </summary>
-        /// <remarks>This could be -1</remarks>
-        public long Length { get; }
+        ContentType = contentType;
+        UnderlyingStream = underlyingStream;
+        Origin = origin;
+        Length = length;
     }
+
+    /// <summary>
+    /// Gets the type of the received contents.
+    /// </summary>
+    public string ContentType { get; }
+
+    /// <summary>
+    /// Gets the original underlying content stream.
+    /// </summary>
+    public Stream UnderlyingStream { get; }
+
+    /// <summary>
+    /// Gets the origin from where the the content stream comes from (when not set: 'unknown origin').
+    /// </summary>
+    /// <remarks>This could be 'unknown origin'</remarks>
+    public string Origin { get; }
+
+    /// <summary>
+    /// Gets the length of the contents stream (when not set: -1)
+    /// </summary>
+    /// <remarks>This could be -1</remarks>
+    public long Length { get; }
+
+    /// <summary>
+    /// The message identifier of the received message.
+    /// </summary>
+    public string? MessageId { get; init; }
+
+    /// <summary>
+    /// The reference to a message identifier of another message.
+    /// </summary>
+    public string? RefToMessageId { get; init; }
+
+    /// <summary>
+    /// The conversation identifier of the received message.
+    /// </summary>
+    public string? ConversationId { get; init; }
+
+    /// <summary>
+    /// The type of the received message.
+    /// </summary>
+    public string? Type { get; init; }
 }

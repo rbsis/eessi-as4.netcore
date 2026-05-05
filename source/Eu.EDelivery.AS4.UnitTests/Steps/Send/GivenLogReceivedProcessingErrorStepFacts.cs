@@ -1,54 +1,54 @@
-﻿using System;
-using System.Threading.Tasks;
-using Eu.EDelivery.AS4.Exceptions;
+﻿using Eu.EDelivery.AS4.Exceptions;
 using Eu.EDelivery.AS4.Model.Core;
 using Eu.EDelivery.AS4.Model.Internal;
 using Eu.EDelivery.AS4.Steps.Send;
 using Eu.EDelivery.AS4.UnitTests.Common;
 using Eu.EDelivery.AS4.UnitTests.Repositories;
-using Xunit;
 
-namespace Eu.EDelivery.AS4.UnitTests.Steps.Send
+namespace Eu.EDelivery.AS4.UnitTests.Steps.Send;
+
+public class GivenLogReceivedProcessingErrorStepFacts : GivenDatastoreFacts
 {
-    public class GivenLogReceivedProcessingErrorStepFacts : GivenDatastoreFacts
+    [Fact]
+    public async Task InExceptionGetsInsertedIfErrorResultAndAS4MessageArePresent()
     {
-        [Fact]
-        public async Task InExceptionGetsInserted_IfErrorResultAndAS4MessageArePresent()
+        // Arrange
+        string id = Guid.NewGuid().ToString(),
+            expected = Guid.NewGuid().ToString();
+
+        var as4Message = AS4Message.Create(new Error($"error-{Guid.NewGuid()}", id));
+        var error = new ErrorResult(expected, default);
+
+        // Act
+        await ExerciseLog(as4Message, error);
+
+        // Assert
+        GetDataStoreContext.AssertInException(id, ex =>
         {
-            // Arrange
-            string id = Guid.NewGuid().ToString(),
-                expected = Guid.NewGuid().ToString();
+            Assert.NotNull(ex);
+            Assert.Equal(expected, ex.Exception);
+        });
+    }
 
-            AS4Message as4Message = AS4Message.Create(new Error($"error-{Guid.NewGuid()}", id));
-            var error = new ErrorResult(expected, default(ErrorAlias));
+    [Fact]
+    public async Task NoExceptionGetsLoggedIfNoErrorResultIsPresent()
+    {
+        // Arrange
+        var id = Guid.NewGuid().ToString();
+        var as4Message = AS4Message.Create(new Error($"error-{Guid.NewGuid()}", id));
 
-            // Act
-            await ExerciseLog(as4Message, error);
+        // Act
+        await ExerciseLog(as4Message, error: null);
 
-            // Assert
-            GetDataStoreContext.AssertInException(id, ex => Assert.Equal(expected, ex.Exception));
-        }
+        // Assert
+        GetDataStoreContext.AssertInException(id, Assert.Null);
+    }
 
-        [Fact]
-        public async Task NoExceptionGetsLogged_IfNoErrorResultIsPresent()
-        {
-            // Arrange
-            string id = Guid.NewGuid().ToString();
-            AS4Message as4Message = AS4Message.Create(new Error($"error-{Guid.NewGuid()}", id));
+    private async Task ExerciseLog(AS4Message as4Message, ErrorResult? error)
+    {
+        var sut = new LogReceivedProcessingErrorStep(Default.NewDatastoreRepository(this));
 
-            // Act
-            await ExerciseLog(as4Message, error: null);
-
-            // Assert
-            GetDataStoreContext.AssertInException(id, Assert.Null);
-        }
-
-        private async Task ExerciseLog(AS4Message as4Message, ErrorResult error)
-        {
-            var sut = new LogReceivedProcessingErrorStep(GetDataStoreContext);
-
-            await sut.ExecuteAsync(
-                new MessagingContext(as4Message, MessagingContextMode.Send) { ErrorResult = error });
-        }
+        await sut.ExecuteAsync(
+            new MessagingContext(as4Message, MessagingContextMode.Send) { ErrorResult = error }, CancellationToken.None);
     }
 }

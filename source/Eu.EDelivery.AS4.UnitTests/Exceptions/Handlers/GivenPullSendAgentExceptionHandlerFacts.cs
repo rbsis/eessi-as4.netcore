@@ -1,7 +1,4 @@
-﻿using System;
-using System.IO;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Text;
 using Eu.EDelivery.AS4.Exceptions;
 using Eu.EDelivery.AS4.Exceptions.Handlers;
 using Eu.EDelivery.AS4.Model.Core;
@@ -9,100 +6,104 @@ using Eu.EDelivery.AS4.Model.Internal;
 using Eu.EDelivery.AS4.Model.Submit;
 using Eu.EDelivery.AS4.UnitTests.Common;
 using Eu.EDelivery.AS4.UnitTests.Repositories;
-using Xunit;
 
-namespace Eu.EDelivery.AS4.UnitTests.Exceptions.Handlers
+namespace Eu.EDelivery.AS4.UnitTests.Exceptions.Handlers;
+
+public class GivenPullSendAgentExceptionHandlerFacts : GivenDatastoreFacts
 {
-    public class GivenPullSendAgentExceptionHandlerFacts : GivenDatastoreFacts
+    private readonly string _expectedMessage = Guid.NewGuid().ToString();
+
+    private readonly PullSendAgentExceptionHandler _sut;
+
+    public GivenPullSendAgentExceptionHandlerFacts()
     {
-        private readonly string _expectedMessage = Guid.NewGuid().ToString();
+        _sut = new(Default.NewOutboundExceptionHandler(this));
+    }
 
-        [Fact]
-        public async Task InsertInException_IfHandlingTransformException()
+    [Fact]
+    public async Task InsertInExceptionIfHandlingTransformException()
+    {
+        // Arrange
+        var expectedBody = Encoding.UTF8.GetBytes("serialize me!");
+
+        using (var stream = new MemoryStream(expectedBody))
         {
-            // Arrange
-            byte[] expectedBody = Encoding.UTF8.GetBytes("serialize me!");
-
-            using (var bodyStore = new InMemoryMessageBodyStore())
-            using (var stream = new MemoryStream(expectedBody))
-            {
-                var sut = new PullSendAgentExceptionHandler(GetDataStoreContext, StubConfig.Default, bodyStore);
-
-                // Act
-                await sut.HandleTransformationException(
-                    new Exception(_expectedMessage),
-                    new ReceivedMessage(stream));
-            }
-            // Assert
-            GetDataStoreContext.AssertOutException(
-                ex =>
-                {
-                    Assert.NotNull(ex);
-                    Assert.Equal(_expectedMessage, ex.Exception);
-                });
-        }
-
-        [Fact]
-        public async Task InsertOutException_IfHandlingExecutionException_DuringReceive()
-        {
-            await TestExecutionException(
-                async sut =>
-                    await sut.HandleExecutionException(
-                        new Exception(_expectedMessage),
-                        new MessagingContext(AS4Message.Empty, MessagingContextMode.Receive)),
-                assertLocation: Assert.Null);
-        }
-
-        [Fact]
-        public async Task InsertOutExcception_IfHandlingExcutionException_DuringSubmit()
-        {
-            await TestExecutionException(
-                async sut =>
-                    await sut.HandleExecutionException(
-                        new Exception(_expectedMessage),
-                        new MessagingContext(new SubmitMessage())),
-                assertLocation: Assert.NotNull);
-        }
-
-        [Fact]
-        public async Task InsertOutException_IfHandlingErrorException_DuringReceive()
-        {
-            await TestExecutionException(
-                async sut =>
-                    await sut.HandleErrorException(
-                        new Exception(_expectedMessage),
-                        new MessagingContext(AS4Message.Empty, MessagingContextMode.Receive)),
-                assertLocation: Assert.Null);
-        }
-
-        [Fact]
-        public async Task InsertOutException_IfHandlingErrorException_DuringSubmit()
-        {
-            await TestExecutionException(
-                async sut =>
-                    await sut.HandleErrorException(
-                        new Exception(_expectedMessage),
-                        new MessagingContext(new SubmitMessage())),
-                assertLocation: Assert.NotNull);
-        }
-
-        private async Task TestExecutionException(
-            Func<IAgentExceptionHandler, Task<MessagingContext>> act,
-            Action<string> assertLocation)
-        {
-            // Arrange
-            var sut = new PullSendAgentExceptionHandler(GetDataStoreContext, StubConfig.Default, new InMemoryMessageBodyStore());
-
             // Act
-            await act(sut);
-
-            // Assert            
-            GetDataStoreContext.AssertOutException(
-                ex =>
-                {
-                    Assert.True(ex.Exception.IndexOf(_expectedMessage, StringComparison.CurrentCultureIgnoreCase) > -1);
-                    assertLocation(ex.MessageLocation);
-                });
+            await _sut.HandleTransformationExceptionAsync(
+                new Exception(_expectedMessage),
+                new ReceivedMessage(stream),
+                CancellationToken.None);
         }
+        // Assert
+        GetDataStoreContext.AssertOutException(
+            ex =>
+            {
+                Assert.NotNull(ex);
+                Assert.Equal(_expectedMessage, ex.Exception);
+            });
+    }
+
+    [Fact]
+    public async Task InsertOutExceptionIfHandlingExecutionExceptionDuringReceive()
+    {
+        await TestExecutionException(
+            async sut =>
+                await sut.HandleExecutionExceptionAsync(
+                    new Exception(_expectedMessage),
+                    new MessagingContext(AS4Message.Empty, MessagingContextMode.Receive),
+                    CancellationToken.None),
+            assertLocation: Assert.Null);
+    }
+
+    [Fact]
+    public async Task InsertOutExcceptionIfHandlingExcutionExceptionDuringSubmit()
+    {
+        await TestExecutionException(
+            async sut =>
+                await sut.HandleExecutionExceptionAsync(
+                    new Exception(_expectedMessage),
+                    new MessagingContext(new SubmitMessage()),
+                    CancellationToken.None),
+            assertLocation: Assert.NotNull);
+    }
+
+    [Fact]
+    public async Task InsertOutExceptionIfHandlingErrorExceptionDuringReceive()
+    {
+        await TestExecutionException(
+            async sut =>
+                await sut.HandleErrorExceptionAsync(
+                    new Exception(_expectedMessage),
+                    new MessagingContext(AS4Message.Empty, MessagingContextMode.Receive),
+                    CancellationToken.None),
+            assertLocation: Assert.Null);
+    }
+
+    [Fact]
+    public async Task InsertOutExceptionIfHandlingErrorExceptionDuringSubmit()
+    {
+        await TestExecutionException(
+            async sut =>
+                await sut.HandleErrorExceptionAsync(
+                    new Exception(_expectedMessage),
+                    new MessagingContext(new SubmitMessage()),
+                    CancellationToken.None),
+            assertLocation: Assert.NotNull);
+    }
+
+    private async Task TestExecutionException(
+        Func<IAgentExceptionHandler, Task<MessagingContext>> act,
+        Action<string?> assertLocation)
+    {
+        // Act
+        await act(_sut);
+
+        // Assert            
+        GetDataStoreContext.AssertOutException(ex =>
+        {
+            Assert.NotNull(ex);
+            Assert.True(ex.Exception.IndexOf(_expectedMessage, StringComparison.CurrentCultureIgnoreCase) > -1);
+            assertLocation(ex.MessageLocation);
+        });
     }
 }

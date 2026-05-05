@@ -1,8 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.IO;
-using System.Threading.Tasks;
+﻿using System.ComponentModel;
+using System.Configuration;
 using Eu.EDelivery.AS4.Common;
 using Eu.EDelivery.AS4.Extensions;
 using Eu.EDelivery.AS4.Factories;
@@ -10,117 +7,123 @@ using Eu.EDelivery.AS4.Model.Common;
 using Eu.EDelivery.AS4.Model.Internal;
 using Eu.EDelivery.AS4.Model.PMode;
 using Eu.EDelivery.AS4.Model.Submit;
-using Eu.EDelivery.AS4.Repositories;
 using Eu.EDelivery.AS4.Strategies.Retriever;
+using MimeKit;
 
-namespace Eu.EDelivery.AS4.Transformers
+namespace Eu.EDelivery.AS4.Transformers;
+
+/// <summary>
+/// This Transformer is responsible for creating a <see cref="MessagingContext"/> that contains a <see cref="SubmitMessage"/> for the payload it has received. 
+/// </summary>
+/// <seealso cref="ITransformer" />
+public class SubmitPayloadTransformer : ITransformer
 {
+    private readonly IConfig _config;
+    private readonly IIdentifierFactory _identifierFactory;
+
+    private IDictionary<string, string> _properties;
+
+    public const string SendingPModeKey = "SendingPMode";
+
+    [Info("Sending Processing Mode", required: true, type: "sendingpmode")]
+    [Description("Sending Processing Mode identifier to indicate which default Processing Mode should be used to create a default SubmitMessage during the transformation of a Payload to a SubmitMessage.")]
+    private string SendingPMode => _properties.ReadOptionalProperty(SendingPModeKey);
+
     /// <summary>
-    /// This Transformer is responsible for creating a <see cref="MessagingContext"/> that contains a <see cref="SubmitMessage"/> for the payload it has received. 
+    /// Initializes a new instance of the <see cref="SubmitPayloadTransformer" /> class.
     /// </summary>
-    /// <seealso cref="ITransformer" />
-    public class SubmitPayloadTransformer : ITransformer
+    /// <param name="configuration">The configuration.</param>
+    /// <param name="identifierFactory"></param>
+    public SubmitPayloadTransformer(IConfig configuration, IIdentifierFactory identifierFactory)
     {
-        private readonly IConfig _config;
+        _config = configuration;
+        _identifierFactory = identifierFactory;
+        _properties = new Dictionary<string, string>();
+    }
 
-        private IDictionary<string, string> _properties;
+    /// <summary>
+    /// Configures the <see cref="ITransformer"/> implementation with specific user-defined properties.
+    /// </summary>
+    /// <param name="properties">The properties.</param>
+    public void Configure(IDictionary<string, string> properties) => _properties = properties;
 
-        [Info("Sending Processing Mode", required: true, type: "sendingpmode")]
-        [Description("Sending Processing Mode identifier to indicate which default Processing Mode should be used to create a default SubmitMessage during the transformation of a Payload to a SubmitMessage.")]
-        private string SendingPMode => _properties.ReadMandatoryProperty("SendingPMode");
+    /// <summary>
+    /// Transform a given <see cref="ReceivedMessage"/> to a Canonical <see cref="MessagingContext"/> instance.
+    /// </summary>
+    /// <param name="message">Given message to transform.</param>
+    /// <returns></returns>
+    /// <param name="cancellation"></param>
+    public Task<MessagingContext> TransformAsync(ReceivedMessage message, CancellationToken cancellation)
+    {
+        var sendingPMode = GetSendingPMode();
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="SubmitPayloadTransformer"/> class.
-        /// </summary>
-        public SubmitPayloadTransformer() : this(Config.Instance) { }
+        var payload = GetPayloadInfo(message);
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="SubmitPayloadTransformer" /> class.
-        /// </summary>
-        /// <param name="configuration">The configuration.</param>
-        public SubmitPayloadTransformer(IConfig configuration)
+        var submit = new SubmitMessage
         {
-            if (configuration == null)
+            MessageInfo =
             {
-                throw new ArgumentNullException(nameof(configuration));
-            }
+                MessageId = message.MessageId ?? _identifierFactory.Create(),
+                RefToMessageId = message.RefToMessageId
+            },
+            Collaboration =
+            {
+                AgreementRef = sendingPMode != null ? new() { PModeId = sendingPMode.Id } : null,
+                ConversationId = message.ConversationId
+            },
+            Payloads = [payload]
+        };
 
-            _config = configuration;
+        if (!string.IsNullOrEmpty(message.Type))
+        {
+            submit.MessageProperties = [new("Type", message.Type)];
         }
 
-        /// <summary>
-        /// Configures the <see cref="ITransformer"/> implementation with specific user-defined properties.
-        /// </summary>
-        /// <param name="properties">The properties.</param>
-        public void Configure(IDictionary<string, string> properties)
-        {
-            if (properties == null)
-            {
-                throw new ArgumentNullException(nameof(properties));
-            }
+        return Task.FromResult(new MessagingContext(submit));
+    }
 
-            _properties = properties;
+    private SendingProcessingMode? GetSendingPMode()
+    {
+        if (string.IsNullOrEmpty(SendingPMode))
+        {
+            return null;
         }
 
-        /// <summary>
-        /// Transform a given <see cref="ReceivedMessage"/> to a Canonical <see cref="MessagingContext"/> instance.
-        /// </summary>
-        /// <param name="message">Given message to transform.</param>
-        /// <returns></returns>
-        public Task<MessagingContext> TransformAsync(ReceivedMessage message)
+        return _config.GetSendingPMode(id: SendingPMode) ??
+            throw new ConfigurationErrorsException($"No Sending Processing Mode found for {SendingPMode}.");
+    }
+
+    private static Payload GetPayloadInfo(ReceivedMessage incoming)
+    {
+        if (incoming.UnderlyingStream is FileStream file)
         {
-            if (message == null)
+            var payloadPath = file.Name;
+
+            return new()
             {
-                throw new ArgumentNullException(nameof(message));
-            }
-
-            SendingProcessingMode sendingPMode = _config.GetSendingPMode(id: SendingPMode);
-
-            (string payloadId, string payloadPath) = GetPayloadInfo(message);
-
-            var submit = new SubmitMessage
-            {
-                MessageInfo = {MessageId = IdentifierFactory.Instance.Create()},
-                Collaboration =
-                {
-                  AgreementRef  = {PModeId = sendingPMode.Id}
-                },
-                Payloads = new[]
-                {
-                    new Payload
-                    {
-                        Id = payloadId,
-                        MimeType = message.ContentType,
-                        Location = payloadPath
-                    }
-                }
+                Id = Path.GetFileNameWithoutExtension(new FileInfo(payloadPath).Name),
+                MimeType = incoming.ContentType,
+                Location = FilePayloadRetriever.Key + payloadPath,
+                PayloadProperties = [new("MimeType", incoming.ContentType)]
             };
-
-            return Task.FromResult(new MessagingContext(submit));
         }
-
-        private static (string payloadId, string payloadPath) GetPayloadInfo(ReceivedMessage incoming)
+        else
         {
-            if (incoming.UnderlyingStream is FileStream file)
+            _ = MimeTypes.TryGetExtension(incoming.ContentType, out var extension);
+
+            var payloadId = Guid.NewGuid().ToString();
+            var payloadPath = Path.Combine(Path.GetTempPath(), payloadId + extension);
+
+            using var tempStream = new FileStream(payloadPath, FileMode.Create, FileAccess.Write);
+            incoming.UnderlyingStream.CopyTo(tempStream);
+
+            return new()
             {
-                string payloadPath = file.Name;
-                string payloadId = Path.GetFileNameWithoutExtension(new FileInfo(payloadPath).Name);
-                return (payloadId, FilePayloadRetriever.Key + payloadPath);
-            }
-            else
-            {
-                string ext = MimeTypeRepository.Instance.GetExtensionFromMimeType(incoming.ContentType);
-
-                string payloadId = Guid.NewGuid().ToString();
-                string payloadPath = Path.Combine(Path.GetTempPath(), payloadId + ext);
-
-                using (var tempStream = new FileStream(payloadPath, FileMode.Create, FileAccess.Write))
-                {
-                    incoming.UnderlyingStream.CopyTo(tempStream);
-                }
-
-                return (payloadId, TempFilePayloadRetriever.Key + payloadPath);
-            }
+                Id = payloadId,
+                MimeType = incoming.ContentType,
+                Location = TempFilePayloadRetriever.Key + payloadPath,
+                PayloadProperties = [new("MimeType", incoming.ContentType)]
+            };
         }
     }
 }

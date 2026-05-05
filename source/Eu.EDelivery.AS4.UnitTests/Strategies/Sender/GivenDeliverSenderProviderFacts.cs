@@ -1,49 +1,42 @@
-﻿using System;
-using System.Collections.Generic;
-using Eu.EDelivery.AS4.Strategies.Sender;
-using Xunit;
+﻿using Eu.EDelivery.AS4.Strategies.Sender;
 
-namespace Eu.EDelivery.AS4.UnitTests.Strategies.Sender
+namespace Eu.EDelivery.AS4.UnitTests.Strategies.Sender;
+
+/// <summary>
+/// Testing <see cref="DeliverSenderProvider"/>
+/// </summary>
+public class GivenDeliverSenderProviderFacts
 {
-    /// <summary>
-    /// Testing <see cref="DeliverSenderProvider"/>
-    /// </summary>
-    public class GivenDeliverSenderProviderFacts
+    [Theory]
+    [InlineData("FILE", "c:\\temp", typeof(FileSender))]
+    [InlineData("HTTP", "https://temp", typeof(HttpSender))]
+    public void DeliverSenderProviderGetsSender(
+        string expectedKey,
+        string location,
+        Type expectedSenderType)
     {
-        public static IEnumerable<object[]> DeliverSenders
+        // Arrange
+        var method = new AS4.Model.PMode.Method
         {
-            get
-            {
-                yield return new object[] { "FILE", typeof(FileSender) };
-                yield return new object[] { "HTTP", typeof(HttpSender) };
-            }
-        }
+            Type = expectedKey,
+            Parameters = [new() { Name = "location", Value = location }]
+        };
 
-        [Theory]
-        [MemberData(nameof(DeliverSenders))]
-        public void DeliverSenderProviderGetsSender(
-            string expectedKey,
-            Type expectedSenderType)
-        {
-            // Arrange
-            var provider = DeliverSenderProvider.Instance;
+        // Act
+        var actualSender = Default.DeliverSenderProvider.GetDeliverSender(method);
 
-            // Act
-            IDeliverSender actualSender = provider.GetDeliverSender(expectedKey);
+        // Assert
+        Assert.IsAssignableFrom<ReliableSender>(actualSender);
+        Assert.IsType(expectedSenderType, ((ReliableDeliverSender)actualSender).InnerDeliverSender);
+    }
 
-            // Assert
-            Assert.IsType<ReliableSender>(actualSender);
-            Assert.IsType(expectedSenderType, ((ReliableSender)actualSender).InnerDeliverSender);
-        }
+    [Fact]
+    public void FailsToGetSenderIfSenderIsNotRegistered()
+    {
+        // Arrange
+        var method = new AS4.Model.PMode.Method { Type = "not exsising key" };
 
-        [Fact]
-        public void FailsToGetSender_IfSenderIsNotRegistered()
-        {
-            // Arrange
-            var sut = DeliverSenderProvider.Instance;
-
-            // Act / Assert
-            Assert.ThrowsAny<Exception>(() => sut.GetDeliverSender("not exsising key"));
-        }
+        // Act / Assert
+        Assert.ThrowsAny<Exception>(() => Default.DeliverSenderProvider.GetDeliverSender(method));
     }
 }

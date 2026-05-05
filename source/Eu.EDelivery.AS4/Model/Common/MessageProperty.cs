@@ -1,83 +1,93 @@
-﻿using System;
+﻿using System.Diagnostics.CodeAnalysis;
 
-namespace Eu.EDelivery.AS4.Model.Common
+namespace Eu.EDelivery.AS4.Model.Common;
+
+public sealed class MessageProperty : IEquatable<MessageProperty>, IEqualityComparer<MessageProperty>
 {
-    public class MessageProperty : IEquatable<MessageProperty>
+    public string Name { get; set; }
+
+    public string Value { get; set; }
+
+    public string? Type { get; set; }
+
+    public MessageProperty() : this(string.Empty, string.Empty)
     {
-        public string Name { get; set; }
+        // Default constructor is necessary for serialization.
+    }
 
-        public string Value { get; set; }
+    public MessageProperty(string name, string value)
+    {
+        Name = name;
+        Value = value;
+    }
 
-        public string Type { get; set; }
-
-        public MessageProperty() : this(string.Empty, string.Empty)
+    /// <summary>
+    /// Indicates whether the current object is equal to another object of the same type.
+    /// </summary>
+    /// <returns>
+    /// true if the current object is equal to the <paramref name="other" /> parameter; otherwise, false.
+    /// </returns>
+    /// <param name="other">An object to compare with this object.</param>
+    public bool Equals(MessageProperty? other)
+    {
+        if (other is null)
         {
-            // Default constructor is necessary for serialization.
+            return false;
         }
 
-        public MessageProperty(string name, string value)
+        if (ReferenceEquals(this, other))
         {
-            Name = name;
-            Value = value;
+            return true;
         }
 
-        /// <summary>
-        /// Indicates whether the current object is equal to another object of the same type.
-        /// </summary>
-        /// <returns>
-        /// true if the current object is equal to the <paramref name="other" /> parameter; otherwise, false.
-        /// </returns>
-        /// <param name="other">An object to compare with this object.</param>
-        public bool Equals(MessageProperty other)
+        return
+            string.Equals(Name, other.Name, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(Value, other.Value, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(Type, other.Type, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Determines whether the specified object is equal to the current object.
+    /// </summary>
+    /// <returns>
+    /// true if the specified object  is equal to the current object; otherwise, false.
+    /// </returns>
+    /// <param name="obj">The object to compare with the current object. </param>
+    public override bool Equals(object? obj)
+    {
+        if (obj is null) return false;
+        if (ReferenceEquals(this, obj)) return true;
+
+        return obj.GetType() == GetType() && Equals((MessageProperty)obj);
+    }
+
+    /// <summary>Determines whether the specified object is equal to the current object.</summary>
+    /// <param name="x"></param>
+    /// <param name="y"></param>
+    /// <returns>true if the specified object is equal to the current object; otherwise, false.</returns>
+    public bool Equals(MessageProperty? x, MessageProperty? y) => x?.Equals(y) == true;
+
+    /// <summary>
+    /// Serves as the default hash function.
+    /// </summary>
+    /// <returns>
+    /// A hash code for the current object.
+    /// </returns>
+    public override int GetHashCode()
+    {
+        unchecked
         {
-            if (ReferenceEquals(null, other))
-            {
-                return false;
-            }
-
-            if (ReferenceEquals(this, other))
-            {
-                return true;
-            }
-
-            return
-                string.Equals(Name, other.Name, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(Value, other.Value, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(Type, other.Type, StringComparison.OrdinalIgnoreCase);
-        }
-
-        /// <summary>
-        /// Determines whether the specified object is equal to the current object.
-        /// </summary>
-        /// <returns>
-        /// true if the specified object  is equal to the current object; otherwise, false.
-        /// </returns>
-        /// <param name="obj">The object to compare with the current object. </param>
-        public override bool Equals(object obj)
-        {
-            if (ReferenceEquals(null, obj)) return false;
-            if (ReferenceEquals(this, obj)) return true;
-
-            return obj.GetType() == GetType() && Equals((MessageProperty)obj);
-        }
-
-        /// <summary>
-        /// Serves as the default hash function.
-        /// </summary>
-        /// <returns>
-        /// A hash code for the current object.
-        /// </returns>
-        public override int GetHashCode()
-        {
-            unchecked
-            {
-                int hashCode = Name != null ? StringComparer.OrdinalIgnoreCase.GetHashCode(Name) : 0;
-                hashCode = (hashCode * 397) ^
-                           (Type != null ? StringComparer.OrdinalIgnoreCase.GetHashCode(Type) : 0);
-                hashCode = (hashCode * 397) ^
-                           (Value != null ? StringComparer.OrdinalIgnoreCase.GetHashCode(Value) : 0);
-                return hashCode;
-            }
+            var hashCode = Name != null ? StringComparer.OrdinalIgnoreCase.GetHashCode(Name) : 0;
+            hashCode = (hashCode * 397) ^
+                       (Type != null ? StringComparer.OrdinalIgnoreCase.GetHashCode(Type) : 0);
+            hashCode = (hashCode * 397) ^
+                       (Value != null ? StringComparer.OrdinalIgnoreCase.GetHashCode(Value) : 0);
+            return hashCode;
         }
     }
+
+    /// <summary>Serves as the default hash function. </summary>
+    /// <param name="obj"></param>
+    /// <returns>A hash code for the current object.</returns>
+    public int GetHashCode([DisallowNull] MessageProperty obj) => obj.GetHashCode();
 }

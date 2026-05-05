@@ -1,82 +1,78 @@
-﻿using System;
-using System.IO;
-using System.Threading.Tasks;
-using Eu.EDelivery.AS4.Model.Core;
+﻿using Eu.EDelivery.AS4.Model.Core;
 using Eu.EDelivery.AS4.Repositories;
 using Eu.EDelivery.AS4.UnitTests.Strategies.Sender;
-using Xunit;
 
-namespace Eu.EDelivery.AS4.UnitTests.Repositories
+namespace Eu.EDelivery.AS4.UnitTests.Repositories;
+
+/// <summary>
+/// <see cref="IAS4MessageBodyStore" /> implementation to sabotage the loading of a <see cref="Stream" /> at a given
+/// location.
+/// </summary>
+internal class SaboteurMessageBodyStore : IAS4MessageBodyStore
 {
     /// <summary>
-    /// <see cref="IAS4MessageBodyStore" /> implementation to sabotage the loading of a <see cref="Stream" /> at a given
-    /// location.
+    /// Loads a <see cref="T:System.IO.Stream" /> at a given stored <paramref name="location" />.
     /// </summary>
-    internal class SaboteurMessageBodyStore : IAS4MessageBodyStore
+    /// <param name="location">The location.</param>
+    /// <returns></returns>
+    /// <exception cref="SaboteurException">Sabotage the load of AS4 Messages</exception>
+    /// <param name="cancellation"></param>
+    public Task<Stream?> LoadMessageBodyAsync(string? location, CancellationToken cancellation)
     {
-        /// <summary>
-        /// Loads a <see cref="T:System.IO.Stream" /> at a given stored <paramref name="location" />.
-        /// </summary>
-        /// <param name="location">The location.</param>
-        /// <returns></returns>
-        /// <exception cref="SaboteurException">Sabotage the load of AS4 Messages</exception>
-        public Task<Stream> LoadMessageBodyAsync(string location)
-        {
-            throw new SaboteurException("Sabotage the load of AS4 Messages");
-        }
-
-        /// <summary>
-        /// Saves a given <see cref="AS4Message" /> to a given location.
-        /// </summary>
-        /// <param name="location">The location.</param>
-        /// <param name="message">The message to save.</param>
-        /// <returns>
-        /// Location where the <paramref name="message" /> is saved.
-        /// </returns>
-        /// <exception cref="NotImplementedException"></exception>
-        public string SaveAS4Message(string location, AS4Message message)
-        {
-            throw new NotImplementedException();
-        }
-
-        /// <summary>
-        /// Updates an existing AS4 Message body.
-        /// </summary>
-        /// <param name="location">The location.</param>
-        /// <param name="message">The message that should overwrite the existing messagebody.</param>
-        /// <returns></returns>
-        /// <exception cref="NotImplementedException"></exception>
-        public void UpdateAS4Message(string location, AS4Message message)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task<string> SaveAS4MessageStreamAsync(string location, Stream as4MessageStream)
-        {
-            throw new NotImplementedException();
-        }        
+        throw new SaboteurException("Sabotage the load of AS4 Messages");
     }
 
-    public class SaboteurMessageBodyStoreFacts
+    /// <summary>
+    /// Saves a given <see cref="AS4Message" /> to a given location.
+    /// </summary>
+    /// <param name="location">The location.</param>
+    /// <param name="message">The message to save.</param>
+    /// <returns>
+    /// Location where the <paramref name="message" /> is saved.
+    /// </returns>
+    /// <exception cref="NotImplementedException"></exception>
+    public string SaveAS4Message(string? location, AS4Message? message)
     {
-        [Fact]
-        public async Task FailsToLoad()
-        {
-            await Assert.ThrowsAnyAsync<Exception>(() => new SaboteurMessageBodyStore().LoadMessageBodyAsync(null));
-        }
+        throw new NotImplementedException();
+    }
 
-        [Fact]
-        public void FailsToSave()
-        {
-            Assert.ThrowsAny<Exception>(
-                () => new SaboteurMessageBodyStore().SaveAS4Message(null, null));
-        }
+    /// <summary>
+    /// Updates an existing AS4 Message body.
+    /// </summary>
+    /// <param name="location">The location.</param>
+    /// <param name="message">The message that should overwrite the existing messagebody.</param>
+    /// <returns></returns>
+    /// <exception cref="NotImplementedException"></exception>
+    public void UpdateAS4Message(string? location, AS4Message? message)
+    {
+        throw new NotImplementedException();
+    }
 
-        [Fact]
-        public void FailsToUpdate()
-        {
-            Assert.ThrowsAny<Exception>(
-                () => new SaboteurMessageBodyStore().UpdateAS4Message(null, null));
-        }
+    public Task<string> SaveAS4MessageStreamAsync(string location, Stream as4MessageStream, CancellationToken cancellation)
+    {
+        throw new NotImplementedException();
+    }
+}
+
+public class SaboteurMessageBodyStoreFacts
+{
+    [Fact]
+    public async Task FailsToLoad()
+    {
+        await Assert.ThrowsAnyAsync<Exception>(() => new SaboteurMessageBodyStore().LoadMessageBodyAsync(null, default));
+    }
+
+    [Fact]
+    public void FailsToSave()
+    {
+        Assert.ThrowsAny<Exception>(
+            () => new SaboteurMessageBodyStore().SaveAS4Message(null, null));
+    }
+
+    [Fact]
+    public void FailsToUpdate()
+    {
+        Assert.ThrowsAny<Exception>(
+            () => new SaboteurMessageBodyStore().UpdateAS4Message(null, null));
     }
 }

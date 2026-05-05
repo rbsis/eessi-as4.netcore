@@ -1,25 +1,26 @@
-﻿using System;
-using System.Linq;
+﻿using MimeKit;
 
-namespace AS4.ParserService.Infrastructure
+namespace AS4.ParserService.Infrastructure;
+
+internal static class MimeTypeMapper
 {
-    internal class MimeTypeMapper
+    public static string GetExtensionFor(string mimeType)
     {
-        public static string GetExtensionFor(string mimeType)
+        if (string.IsNullOrWhiteSpace(mimeType))
         {
-            if (String.IsNullOrWhiteSpace(mimeType))
-            {
-                return string.Empty;
-            }
-
-            if (mimeType.Equals("text/xml", StringComparison.OrdinalIgnoreCase))
-            {
-                return ".xml";
-            }
-
-            var extension = new MimeSharp.Mime().Extension(mimeType).FirstOrDefault();
-
-            return String.IsNullOrWhiteSpace(extension) ? string.Empty : extension;
+            return string.Empty;
         }
+
+        if (mimeType.Equals("text/xml", StringComparison.OrdinalIgnoreCase))
+        {
+            return ".xml";
+        }
+
+        if (MimeTypes.TryGetExtension(mimeType, out var extension))
+        {
+            return extension;
+        }
+
+        return string.Empty;
     }
 }

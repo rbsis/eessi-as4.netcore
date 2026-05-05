@@ -1,103 +1,99 @@
-﻿using System.Linq;
-using System.Threading.Tasks;
-using Eu.EDelivery.AS4.Entities;
+﻿using Eu.EDelivery.AS4.Entities;
 using Eu.EDelivery.AS4.UnitTests.Common;
-using Xunit;
 
-namespace Eu.EDelivery.AS4.UnitTests.Entities
+namespace Eu.EDelivery.AS4.UnitTests.Entities;
+
+public class GivenExceptionEntityPersitenceFacts : GivenDatastoreFacts
 {
-    public class GivenExceptionEntityPersitenceFacts : GivenDatastoreFacts
+    [Fact]
+    public async Task ExceptionOperationIsCorrectlyPersisted()
     {
-        [Fact]
-        public async Task ExceptionOperationIsCorrectlyPersisted()
+        long savedId;
+
+        using (var db = GetDataStoreContext())
         {
-            long savedId;
+            var inException = InException.ForEbmsMessageId("message-id", "some-error-happened");
+            inException.Operation = Operation.Sent;
 
-            using (var db = GetDataStoreContext())
-            {
-                var inException = InException.ForEbmsMessageId("message-id", "some-error-happened");
-                inException.Operation = Operation.Sent;
+            db.InExceptions.Add(inException);
 
-                db.InExceptions.Add(inException);
+            await db.SaveChangesAsync();
 
-                await db.SaveChangesAsync();
+            savedId = inException.Id;
 
-                savedId = inException.Id;
-
-                Assert.NotEqual(default(long), savedId);
-            }
-
-            using (var db = GetDataStoreContext())
-            {
-                var inMessage = db.InExceptions.FirstOrDefault(i => i.Id == savedId);
-
-                Assert.NotNull(inMessage);
-                Assert.Equal(Operation.Sent, inMessage.Operation);
-            }
+            Assert.NotEqual(default, savedId);
         }
 
-        [Fact]
-        public async Task OutExceptionPModeInformationIsCorrectlyPersisted()
+        using (var db = GetDataStoreContext())
         {
-            long savedId;
+            var inMessage = db.InExceptions.FirstOrDefault(i => i.Id == savedId);
 
-            const string pmodeId = "pmode-id1";
-            const string pmodeContent = "<pmode></pmode>";
+            Assert.NotNull(inMessage);
+            Assert.Equal(Operation.Sent, inMessage.Operation);
+        }
+    }
 
-            using (var db = GetDataStoreContext())
-            {
-                var outException = OutException.ForEbmsMessageId("message-id", "some-error-happened");
-                outException.SetPModeInformation(pmodeId, pmodeContent);
+    [Fact]
+    public async Task OutExceptionPModeInformationIsCorrectlyPersisted()
+    {
+        long savedId;
 
-                db.OutExceptions.Add(outException);
+        const string PModeId = "pmode-id1";
+        const string PModeContent = "<pmode></pmode>";
 
-                await db.SaveChangesAsync();
+        using (var db = GetDataStoreContext())
+        {
+            var outException = OutException.ForEbmsMessageId("message-id", "some-error-happened");
+            outException.SetPModeInformation(PModeId, PModeContent);
 
-                savedId = outException.Id;
+            db.OutExceptions.Add(outException);
 
-                Assert.NotEqual(default(long), savedId);
-            }
+            await db.SaveChangesAsync();
 
-            using (var db = GetDataStoreContext())
-            {
-                var outException = db.OutExceptions.FirstOrDefault(i => i.Id == savedId);
+            savedId = outException.Id;
 
-                Assert.NotNull(outException);
-                Assert.Equal(pmodeId, outException.PModeId);
-                Assert.Equal(pmodeContent, outException.PMode);
-            }
+            Assert.NotEqual(default, savedId);
         }
 
-        [Fact]
-        public async Task InExceptionPModeInformationIsCorrectlyPersisted()
+        using (var db = GetDataStoreContext())
         {
-            long savedId;
+            var outException = db.OutExceptions.FirstOrDefault(i => i.Id == savedId);
 
-            const string pmodeId = "pmode-id1";
-            const string pmodeContent = "<pmode></pmode>";
+            Assert.NotNull(outException);
+            Assert.Equal(PModeId, outException.PModeId);
+            Assert.Equal(PModeContent, outException.PMode);
+        }
+    }
 
-            using (var db = GetDataStoreContext())
-            {
-                var inException = InException.ForEbmsMessageId("message-id", "some-error-happened");
-                inException.SetPModeInformation(pmodeId, pmodeContent);
+    [Fact]
+    public async Task InExceptionPModeInformationIsCorrectlyPersisted()
+    {
+        long savedId;
 
-                db.InExceptions.Add(inException);
+        const string PModeId = "pmode-id1";
+        const string PModeContent = "<pmode></pmode>";
 
-                await db.SaveChangesAsync();
+        using (var db = GetDataStoreContext())
+        {
+            var inException = InException.ForEbmsMessageId("message-id", "some-error-happened");
+            inException.SetPModeInformation(PModeId, PModeContent);
 
-                savedId = inException.Id;
+            db.InExceptions.Add(inException);
 
-                Assert.NotEqual(default(long), savedId);
-            }
+            await db.SaveChangesAsync();
 
-            using (var db = GetDataStoreContext())
-            {
-                var inException = db.InExceptions.FirstOrDefault(i => i.Id == savedId);
+            savedId = inException.Id;
 
-                Assert.NotNull(inException);
-                Assert.Equal(pmodeId, inException.PModeId);
-                Assert.Equal(pmodeContent, inException.PMode);
-            }
+            Assert.NotEqual(default, savedId);
+        }
+
+        using (var db = GetDataStoreContext())
+        {
+            var inException = db.InExceptions.FirstOrDefault(i => i.Id == savedId);
+
+            Assert.NotNull(inException);
+            Assert.Equal(PModeId, inException.PModeId);
+            Assert.Equal(PModeContent, inException.PMode);
         }
     }
 }

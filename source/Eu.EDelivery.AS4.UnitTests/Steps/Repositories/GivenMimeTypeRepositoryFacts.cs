@@ -1,43 +1,41 @@
-﻿using Eu.EDelivery.AS4.Repositories;
-using Xunit;
+﻿using MimeKit;
 
-namespace Eu.EDelivery.AS4.UnitTests.Steps.Repositories
+namespace Eu.EDelivery.AS4.UnitTests.Steps.Repositories;
+
+/// <summary>
+/// Testing <see cref="MimeTypes" />
+/// </summary>
+public class GivenMimeTypeRepositoryFacts
 {
-    /// <summary>
-    /// Testing <see cref="MimeTypeRepository" />
-    /// </summary>
-    public class GivenMimeTypeRepositoryFacts
+    public class GivenValidArguments : GivenMimeTypeRepositoryFacts
     {
-        public class GivenValidArguments : GivenMimeTypeRepositoryFacts
+        [Fact]
+        public void ThenGetsExtensionSucceedsWithValidMimeContentType()
         {
-            [Fact]
-            public void ThenGetsExtensionSucceedsWithValidMimeContentType()
-            {
-                // Arrange
-                const string mimeContentType = "image/jpeg";
+            // Arrange
+            const string MimeContentType = "image/jpeg";
 
-                // Act
-                string extension = MimeTypeRepository.Instance.GetExtensionFromMimeType(mimeContentType);
+            // Act
+            _ = MimeTypes.TryGetExtension(MimeContentType, out var extension);
 
-                // Assert
-                Assert.Equal(".jpg", extension);
-            }
+            // Assert
+            Assert.Equal(".jpg", extension);
         }
+    }
 
-        public class GivenInvalidArguments : GivenMimeTypeRepositoryFacts
+    public class GivenInvalidArguments : GivenMimeTypeRepositoryFacts
+    {
+        [Fact]
+        public void ThenGetsExtensionFailsWithInvalidMimeContentType()
         {
-            [Fact]
-            public void ThenGetsExtensionFailsWithInvalidMimeContentType()
-            {
-                // Arrange
-                const string mimeContentType = "invalid/type";
+            // Arrange
+            const string MimeContentType = "invalid/type";
 
-                // Act
-                string extension = MimeTypeRepository.Instance.GetExtensionFromMimeType(mimeContentType);
+            // Act
+            _ = MimeTypes.TryGetExtension(MimeContentType, out var extension);
 
-                // Assert
-                Assert.Empty(extension);
-            }
+            // Assert
+            Assert.Null(extension);
         }
     }
 }

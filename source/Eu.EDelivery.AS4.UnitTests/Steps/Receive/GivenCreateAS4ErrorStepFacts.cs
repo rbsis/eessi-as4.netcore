@@ -1,165 +1,159 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Eu.EDelivery.AS4.Exceptions;
+﻿using Eu.EDelivery.AS4.Exceptions;
 using Eu.EDelivery.AS4.Model.Core;
 using Eu.EDelivery.AS4.Model.Internal;
 using Eu.EDelivery.AS4.Model.PMode;
 using Eu.EDelivery.AS4.Security.Signing;
-using Eu.EDelivery.AS4.Steps;
 using Eu.EDelivery.AS4.Steps.Receive;
 using Eu.EDelivery.AS4.UnitTests.Common;
 using Eu.EDelivery.AS4.UnitTests.Model;
 using FsCheck;
 using FsCheck.Xunit;
-using Xunit;
+using Microsoft.Extensions.Logging.Abstractions;
 
-namespace Eu.EDelivery.AS4.UnitTests.Steps.Receive
+namespace Eu.EDelivery.AS4.UnitTests.Steps.Receive;
+
+public class GivenCreateAS4ErrorStepFacts : GivenDatastoreFacts
 {
-    public class GivenCreateAS4ErrorStepFacts : GivenDatastoreFacts
+    [Property]
+    public Property CreatesErrorForEachBundledUserMessage(bool isMultiHop)
     {
-        [Property]
-        public Property Creates_Error_For_Each_Bundled_UserMessage(bool isMultiHop)
-        {
-            return Prop.ForAll(
-                Gen.Fresh(() => new UserMessage($"user-{Guid.NewGuid()}"))
-                   .NonEmptyListOf()
-                   .ToArbitrary(),
-                userMessages =>
-                {
-                    // Arrange
-                    AS4Message fixture = AS4Message.Create(
-                        userMessages, 
-                        new SendingProcessingMode { MessagePackaging = { IsMultiHop = isMultiHop } });
-                    IEnumerable<string> fixtureMessageIds = fixture.MessageIds;
-
-                    // Act
-                    StepResult result =
-                        CreateErrorStep()
-                            .ExecuteAsync(new MessagingContext(fixture, MessagingContextMode.Receive))
-                            .GetAwaiter()
-                            .GetResult();
-
-                    // Assert
-                    AS4Message errorMessage = result.MessagingContext.AS4Message;
-                    Assert.All(
-                        errorMessage.MessageUnits,
-                        messageUnit =>
-                        {
-                            Assert.IsType<Error>(messageUnit);
-                            var error = (Error) messageUnit;
-                            Assert.Contains(error.RefToMessageId, fixtureMessageIds);
-
-                            Maybe<string> expectedId =
-                                Maybe.Just(error.RefToMessageId)
-                                     .Where(_ => isMultiHop);
-
-                            Maybe<string> actualId = 
-                                error.MultiHopRouting
-                                     .Select(r => r.MessageInfo?.MessageId);
-
-                            Assert.Equal(expectedId, actualId);
-                        });
-                });
-        }
-
-        [Fact]
-        public async Task Skips_Create_Error_When_AS4Message_Is_Empty()
-        {
-            // Arrange
-            var fixture = new MessagingContext(AS4Message.Empty, MessagingContextMode.Receive);
-
-            // Act
-            StepResult result = await CreateErrorStep()
-                .ExecuteAsync(fixture);
-
-            // Assert
-            Assert.Equal(fixture, result.MessagingContext);
-        }
-
-        [Fact]
-        public async Task Creates_Error_Based_On_ErrorResult_Information()
-        {
-            // Arrange
-            AS4Message as4Message = CreateFilledAS4Message();
-            var fixture = new MessagingContext(
-                as4Message,
-                MessagingContextMode.Unknown)
+        return Prop.ForAll(
+            Gen.Fresh(() => new UserMessage($"user-{Guid.NewGuid()}"))
+               .NonEmptyListOf()
+               .ToArbitrary(),
+            userMessages =>
             {
-                ErrorResult = new ErrorResult("error", ErrorAlias.ConnectionFailure),
-                ReceivingPMode = new ReceivingProcessingMode()
-            };
+                // Arrange
+                var fixture = AS4Message.Create(
+                    userMessages,
+                    new SendingProcessingMode { MessagePackaging = { IsMultiHop = isMultiHop } });
+                IEnumerable<string> fixtureMessageIds = fixture.MessageIds;
 
-            // Act
-            StepResult result = await CreateErrorStep().ExecuteAsync(fixture);
+                // Act
+                var result =
+                    CreateErrorStep()
+                        .ExecuteAsync(new MessagingContext(fixture, MessagingContextMode.Receive), CancellationToken.None)
+                        .GetAwaiter()
+                        .GetResult();
 
-            // Assert
-            var error = result.MessagingContext.AS4Message.FirstSignalMessage as Error;
+                // Assert
+                var errorMessage = result.MessagingContext.AS4Message;
+                Assert.NotNull(errorMessage);
+                Assert.All(
+                    errorMessage.MessageUnits,
+                    messageUnit =>
+                    {
+                        Assert.IsType<Error>(messageUnit);
+                        var error = (Error)messageUnit;
+                        Assert.Contains(error.RefToMessageId, fixtureMessageIds);
 
-            Assert.NotNull(error);
-            Assert.Equal("message-id", error.RefToMessageId);
-            Assert.Equal(ErrorCode.Ebms0005, error.ErrorLines.First().ErrorCode);
-        }
+                        var expectedId =
+                            Maybe.Just(error.RefToMessageId)
+                                 .Where(_ => isMultiHop);
 
-        [Fact]
-        public async Task Creates_Error_With_Same_SigningId_As_Received_UserMessage()
+                        var actualId =
+                            error.MultiHopRouting
+                                 .Select(r => r.MessageInfo?.MessageId);
+
+                        Assert.Equal(expectedId, actualId);
+                    });
+            });
+    }
+
+    [Fact]
+    public async Task SkipsCreateErrorWhenAS4MessageIsEmpty()
+    {
+        // Arrange
+        var fixture = new MessagingContext(AS4Message.Empty, MessagingContextMode.Receive);
+
+        // Act
+        var result = await CreateErrorStep()
+            .ExecuteAsync(fixture, CancellationToken.None);
+
+        // Assert
+        Assert.Equal(fixture, result.MessagingContext);
+    }
+
+    [Fact]
+    public async Task CreatesErrorBasedOnErrorResultInformation()
+    {
+        // Arrange
+        var as4Message = CreateFilledAS4Message();
+        var fixture = new MessagingContext(
+            as4Message,
+            MessagingContextMode.Unknown)
         {
-            // Arrange
-            AS4Message as4Message = CreateFilledAS4Message();
-            as4Message.SigningId = new SigningId("header-id", "body-id");
+            ErrorResult = new ErrorResult("error", ErrorAlias.ConnectionFailure),
+            ReceivingPMode = new ReceivingProcessingMode()
+        };
 
-            var fixture = new MessagingContext(
-                as4Message,
-                MessagingContextMode.Unknown)
-            {
-                ReceivingPMode = new ReceivingProcessingMode()
-            };
+        // Act
+        var result = await CreateErrorStep().ExecuteAsync(fixture, CancellationToken.None);
 
-            // Act
-            StepResult result = await CreateErrorStep().ExecuteAsync(fixture);
+        // Assert
+        Assert.NotNull(result.MessagingContext.AS4Message);
+        var error = result.MessagingContext.AS4Message.FirstSignalMessage as Error;
 
-            // Assert
-            Assert.Equal(as4Message.SigningId, result.MessagingContext.AS4Message.SigningId);
-        }
+        Assert.NotNull(error);
+        Assert.Equal("message-id", error.RefToMessageId);
+        Assert.Equal(ErrorCode.Ebms0005, error.ErrorLines.First().ErrorCode);
+    }
 
-        [Fact]
-        public async Task Creates_MultiHop_Error_If_Received_UserMessage_Is_MultiHop()
+    [Fact]
+    public async Task CreatesErrorWithSameSigningIdAsReceivedUserMessage()
+    {
+        // Arrange
+        var as4Message = CreateFilledAS4Message();
+        as4Message.SigningId = new SigningId("header-id", "body-id");
+
+        var fixture = new MessagingContext(
+            as4Message,
+            MessagingContextMode.Unknown)
         {
-            // Arrange
-            var ctx = new MessagingContext(
-                AS4Message.Create(
-                    new UserMessage($"user-{Guid.NewGuid()}"),
-                    new SendingProcessingMode { MessagePackaging = { IsMultiHop = true } }),
-                MessagingContextMode.Receive)
-            {
-                ReceivingPMode = new ReceivingProcessingMode()
-            };
+            ReceivingPMode = new ReceivingProcessingMode()
+        };
 
-            // Act
-            AS4Message actual = await ExerciseCreateError(ctx);
+        // Act
+        var result = await CreateErrorStep().ExecuteAsync(fixture, CancellationToken.None);
 
-            // Assert
-            Assert.IsType<Error>(actual.PrimaryMessageUnit);
-            Assert.True(actual.IsMultiHopMessage, "Is not multi-hop message");
-        }
+        // Assert
+        Assert.NotNull(result.MessagingContext.AS4Message);
+        Assert.Equal(as4Message.SigningId, result.MessagingContext.AS4Message.SigningId);
+    }
 
-        private static AS4Message CreateFilledAS4Message()
+    [Fact]
+    public async Task CreatesMultiHopErrorIfReceivedUserMessageIsMultiHop()
+    {
+        // Arrange
+        var ctx = new MessagingContext(
+            AS4Message.Create(
+                new UserMessage($"user-{Guid.NewGuid()}"),
+                new SendingProcessingMode { MessagePackaging = { IsMultiHop = true } }),
+            MessagingContextMode.Receive)
         {
-            return AS4Message.Create(new FilledUserMessage());
-        }
+            ReceivingPMode = new ReceivingProcessingMode()
+        };
 
-        private IStep CreateErrorStep()
-        {
-            return new CreateAS4ErrorStep(GetDataStoreContext);
-        }
+        // Act
+        var actual = await ExerciseCreateError(ctx);
 
-        private async Task<AS4Message> ExerciseCreateError(MessagingContext ctx)
-        {
-            var sut = new CreateAS4ErrorStep(GetDataStoreContext);
-            StepResult result = await sut.ExecuteAsync(ctx);
+        // Assert
+        Assert.IsType<Error>(actual.PrimaryMessageUnit);
+        Assert.True(actual.IsMultiHopMessage, "Is not multi-hop message");
+    }
 
-            return result.MessagingContext.AS4Message;
-        }
+    private static AS4Message CreateFilledAS4Message() => AS4Message.Create(new FilledUserMessage());
+
+    private CreateAS4ErrorStep CreateErrorStep() => new(
+        NullLogger<CreateAS4ErrorStep>.Instance,
+        Default.NewDatastoreRepository(this),
+        Default.IdentifierFactory);
+
+    private async Task<AS4Message> ExerciseCreateError(MessagingContext ctx)
+    {
+        var sut = CreateErrorStep();
+        var result = await sut.ExecuteAsync(ctx, CancellationToken.None);
+
+        return result.MessagingContext.AS4Message ?? throw new InvalidOperationException();
     }
 }

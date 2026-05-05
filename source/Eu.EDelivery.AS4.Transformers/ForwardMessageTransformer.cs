@@ -1,37 +1,35 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using Eu.EDelivery.AS4.Model.Internal;
+﻿using Eu.EDelivery.AS4.Model.Internal;
 
-namespace Eu.EDelivery.AS4.Transformers
+namespace Eu.EDelivery.AS4.Transformers;
+
+public class ForwardMessageTransformer : ITransformer
 {
-    public class ForwardMessageTransformer : ITransformer
+    private readonly AS4MessageTransformer _transformer;
+
+    public ForwardMessageTransformer(AS4MessageTransformer transformer)
     {
-        /// <summary>
-        /// Configures the <see cref="ITransformer"/> implementation with specific user-defined properties.
-        /// </summary>
-        /// <param name="properties">The properties.</param>
-        public void Configure(IDictionary<string, string> properties) { }
+        _transformer = transformer;
+    }
 
-        /// <summary>
-        /// Transform a given <see cref="ReceivedMessage"/> to a Canonical <see cref="MessagingContext"/> instance.
-        /// </summary>
-        /// <param name="message">Given message to transform.</param>
-        /// <returns></returns>
-        public async Task<MessagingContext> TransformAsync(ReceivedMessage message)
-        {
-            if (message == null)
-            {
-                throw new ArgumentNullException(nameof(message));
-            }
+    /// <summary>
+    /// Configures the <see cref="ITransformer"/> implementation with specific user-defined properties.
+    /// </summary>
+    /// <param name="properties">The properties.</param>
+    public void Configure(IDictionary<string, string> properties) { }
 
-            var transformer = new AS4MessageTransformer();
-            MessagingContext sendContext = await transformer.TransformAsync(message);
-            
-            return new MessagingContext(
-                sendContext.AS4Message,
-                sendContext.ReceivedMessage, 
-                MessagingContextMode.Forward);
-        }
+    /// <summary>
+    /// Transform a given <see cref="ReceivedMessage"/> to a Canonical <see cref="MessagingContext"/> instance.
+    /// </summary>
+    /// <param name="message">Given message to transform.</param>
+    /// <returns></returns>
+    /// <param name="cancellation"></param>
+    public async Task<MessagingContext> TransformAsync(ReceivedMessage message, CancellationToken cancellation)
+    {
+        var sendContext = await _transformer.TransformAsync(message, cancellation);
+
+        return new MessagingContext(
+            sendContext.AS4Message!,
+            sendContext.ReceivedMessage!,
+            MessagingContextMode.Forward);
     }
 }

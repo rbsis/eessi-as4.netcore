@@ -1,12 +1,4 @@
-﻿using System;
-using System.ComponentModel;
-using System.IO;
-using System.Linq;
-using System.Linq.Expressions;
-using System.Threading.Tasks;
-using System.Transactions;
-using Eu.EDelivery.AS4.Common;
-using Eu.EDelivery.AS4.Entities;
+﻿using System.ComponentModel;
 using Eu.EDelivery.AS4.Exceptions;
 using Eu.EDelivery.AS4.Factories;
 using Eu.EDelivery.AS4.Model.Core;
@@ -14,126 +6,73 @@ using Eu.EDelivery.AS4.Model.Internal;
 using Eu.EDelivery.AS4.Model.PMode;
 using Eu.EDelivery.AS4.Repositories;
 using Eu.EDelivery.AS4.Serialization;
-using Microsoft.EntityFrameworkCore;
-using log4net;
-using MessageExchangePattern = Eu.EDelivery.AS4.Entities.MessageExchangePattern;
 
-namespace Eu.EDelivery.AS4.Steps.Send
+namespace Eu.EDelivery.AS4.Steps.Send;
+
+/// <summary>
+/// Describes how a MessageUnit should be selected to be sent via Pulling.
+/// </summary>
+/// <seealso cref="IStep" />
+[Info("Select message to send")]
+[Description(
+    "Selects a message that is eligible for sending via pulling. " +
+    "This step selects a message that matches the MPC of the received pull-request signalmessage.")]
+public class SelectUserMessageToSendStep : IStep
 {
+    private readonly IDatastoreRepository _repository;
+    private readonly IAS4MessageBodyStore _messageBodyStore;
+    private readonly IIdentifierFactory _identifierFactory;
+
     /// <summary>
-    /// Describes how a MessageUnit should be selected to be sent via Pulling.
+    /// Initializes a new instance of the <see cref="SelectUserMessageToSendStep" /> class.
     /// </summary>
-    /// <seealso cref="IStep" />
-    [Info("Select message to send")]
-    [Description(
-        "Selects a message that is eligible for sending via pulling. " +
-        "This step selects a message that matches the MPC of the received pull-request signalmessage.")]
-    public class SelectUserMessageToSendStep : IStep
+    /// <param name="repository"></param>
+    /// <param name="messageBodyStore"></param>
+    /// <param name="identifierFactory"></param>
+    public SelectUserMessageToSendStep(
+        IDatastoreRepository repository,
+        IAS4MessageBodyStore messageBodyStore,
+        IIdentifierFactory identifierFactory)
     {
-        private static readonly ILog Logger = LogManager.GetLogger( System.Reflection.MethodBase.GetCurrentMethod().DeclaringType );
+        _messageBodyStore = messageBodyStore;
+        _repository = repository;
+        _identifierFactory = identifierFactory;
+    }
 
-        private readonly Func<DatastoreContext> _createContext;
-        private readonly IAS4MessageBodyStore _messageBodyStore;
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="SelectUserMessageToSendStep"/> class.
-        /// </summary>
-        public SelectUserMessageToSendStep()
-            : this(Registry.Instance.CreateDatastoreContext, Registry.Instance.MessageBodyStore) { }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="SelectUserMessageToSendStep" /> class.
-        /// </summary>
-        /// <param name="createContext">The create context.</param>
-        /// <param name="messageBodyStore">The message body store.</param>
-        public SelectUserMessageToSendStep(
-            Func<DatastoreContext> createContext,
-            IAS4MessageBodyStore messageBodyStore)
+    /// <summary>
+    /// Execute the step for a given <paramref name="messagingContext" />.
+    /// </summary>
+    /// <param name="messagingContext">Message used during the step execution.</param>
+    /// <returns></returns>
+    /// <param name="cancellation"></param>
+    public async Task<StepResult> ExecuteAsync(MessagingContext messagingContext, CancellationToken cancellation)
+    {
+        var pullRequest = messagingContext.AS4Message?.FirstSignalMessage as PullRequest ?? throw new InvalidMessageException(
+                "The received message is not a PullRequest message, " +
+                "therefore no UserMessage can be selected to return to the sender");
+        var match = _repository.RetrieveUserMessageForPullRequest(pullRequest);
+        if (match is not null && match.ContentType is not null)
         {
-            if (createContext == null)
+            // Retrieve the existing MessageBody and put that stream in the MessagingContext.
+            // The HttpReceiver processor will make sure that it gets serialized to the http response stream.
+            var messageBody = await _messageBodyStore.LoadMessageBodyAsync(match.MessageLocation, cancellation);
+            if (messageBody is null)
             {
-                throw new ArgumentNullException(nameof(createContext));
+                return await StepResult.FailedAsync(messagingContext);
             }
 
-            if (messageBodyStore == null)
-            {
-                throw new ArgumentNullException(nameof(messageBodyStore));
-            }
+            messagingContext.ModifyContext(
+                new ReceivedMessage(messageBody, match.ContentType),
+                MessagingContextMode.Send);
 
-            _createContext = createContext;
-            _messageBodyStore = messageBodyStore;
+            messagingContext.SendingPMode = await AS4XmlSerializer.FromStringAsync<SendingProcessingMode>(match.PMode, cancellation);
+
+            return await StepResult.SuccessAsync(messagingContext);
         }
 
-        /// <summary>
-        /// Execute the step for a given <paramref name="messagingContext" />.
-        /// </summary>
-        /// <param name="messagingContext">Message used during the step execution.</param>
-        /// <returns></returns>
-        public async Task<StepResult> ExecuteAsync(MessagingContext messagingContext)
-        {
-            var pullRequest = messagingContext?.AS4Message?.FirstSignalMessage as PullRequest;
-            if (pullRequest == null)
-            {
-                throw new InvalidMessageException(
-                    "The received message is not a PullRequest message, " +
-                    "therefore no UserMessage can be selected to return to the sender");
-            }
+        var pullRequestWarning = AS4Message.Create(Error.CreatePullRequestWarning(_identifierFactory.Create()));
+        messagingContext.ModifyContext(pullRequestWarning);
 
-            (bool hasMatch, OutMessage match) = RetrieveUserMessageForPullRequest(pullRequest);
-            if (hasMatch)
-            {
-                // Retrieve the existing MessageBody and put that stream in the MessagingContext.
-                // The HttpReceiver processor will make sure that it gets serialized to the http response stream.
-                Stream messageBody = await match.RetrieveMessageBody(_messageBodyStore).ConfigureAwait(false);
-
-                messagingContext.ModifyContext(
-                    new ReceivedMessage(messageBody, match.ContentType), 
-                    MessagingContextMode.Send);
-
-                messagingContext.SendingPMode = AS4XmlSerializer.FromString<SendingProcessingMode>(match.PMode);
-
-                return StepResult.Success(messagingContext);
-            }
-
-            AS4Message pullRequestWarning = AS4Message.Create(Error.CreatePullRequestWarning(IdentifierFactory.Instance.Create()));
-            messagingContext.ModifyContext(pullRequestWarning);
-
-            return StepResult.Success(messagingContext).AndStopExecution();
-        }
-
-        private (bool, OutMessage) RetrieveUserMessageForPullRequest(PullRequest pullRequest)
-        {
-            using (DatastoreContext context = _createContext())
-            {
-                context.Database.BeginTransaction(System.Data.IsolationLevel.RepeatableRead);
-
-                OutMessage message = context.OutMessages
-                    .Where(PullRequestQuery(pullRequest))
-                    .OrderBy(m => m.InsertionTime).Take(1).FirstOrDefault();
-
-                if (message == null)
-                {
-                    Logger.Warn($"No UserMessage found for PullRequest.Mpc: {Config.Encode(pullRequest.Mpc)}");
-                    return (false, null);
-                }
-
-                message.Operation = Operation.Sent;
-
-                context.SaveChanges();
-                context.Database.CommitTransaction();
-
-                Logger.Info($"(PullSend) UserMessage found for PullRequest.Mpc: {Config.Encode(pullRequest.Mpc)}");
-                return (true, message);
-            }
-        }
-
-        private static Expression<Func<OutMessage, bool>> PullRequestQuery(PullRequest pullRequest)
-        {
-            Logger.Debug($"Query UserMessages with MPC={Config.Encode(pullRequest.Mpc)} && Operation=ToBeSent && MEP=Pull");
-
-            return m => m.Mpc == pullRequest.Mpc &&
-                        m.Operation == Operation.ToBeSent &&
-                        m.MEP == MessageExchangePattern.Pull;
-        }
+        return (await StepResult.SuccessAsync(messagingContext)).AndStopExecution();
     }
 }

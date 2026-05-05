@@ -1,119 +1,98 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
-using AS4.ParserService.Infrastructure;
+﻿using AS4.ParserService.Infrastructure;
 using AS4.ParserService.Models;
 using Eu.EDelivery.AS4.Model.Common;
 using Eu.EDelivery.AS4.Model.Core;
 using Eu.EDelivery.AS4.Model.Internal;
 using Eu.EDelivery.AS4.Model.PMode;
 using Eu.EDelivery.AS4.Model.Submit;
-using Eu.EDelivery.AS4.Steps;
 using Eu.EDelivery.AS4.Steps.Submit;
-using Eu.EDelivery.AS4.Strategies.Retriever;
 
-namespace AS4.ParserService.Services
+namespace AS4.ParserService.Services;
+
+public partial class EncodeService
 {
-    internal class EncodeService
+    private readonly CreateAS4MessageStep _createAS4MessageStep;
+    private readonly StepProcessor _stepProcessor;
+
+    public EncodeService(CreateAS4MessageStep createAS4MessageStep, StepProcessor stepProcessor)
     {
-        internal async Task<MessagingContext> CreateAS4Message(EncodeMessageInfo encodeInfo)
+        _createAS4MessageStep = createAS4MessageStep;
+        _stepProcessor = stepProcessor;
+    }
+
+    internal async Task<MessagingContext?> CreateAS4MessageAsync(EncodeMessageInfo encodeInfo, CancellationToken cancellation)
+    {
+        var pmode = await AssembleSendingPModeAsync(encodeInfo, cancellation);
+        if (pmode == null)
         {
-            var pmode = await AssembleSendingPMode(encodeInfo);
-
-            if (pmode == null)
-            {
-                return null;
-            }
-
-            var as4Message = await AssembleAS4MessageAsync(pmode, encodeInfo.Payloads);
-
-            var context = SetupMessagingContext(as4Message, pmode);
-
-            return await StepProcessor.ExecuteStepsAsync(context, StepRegistry.GetOutboundProcessingStepConfiguration());
+            return null;
         }
 
-        private static async Task<SendingProcessingMode> AssembleSendingPMode(EncodeMessageInfo encodeInfo)
+        var as4Message = await AssembleAS4MessageAsync(pmode, encodeInfo.Payloads, cancellation);
+
+        var context = SetupMessagingContext(as4Message, pmode);
+
+        return await _stepProcessor.ExecuteStepsAsync(context, StepRegistry.OutboundProcessingStepConfiguration, cancellation);
+    }
+
+    private static async Task<SendingProcessingMode?> AssembleSendingPModeAsync(EncodeMessageInfo encodeInfo, CancellationToken cancellation)
+    {
+        if (encodeInfo.SendingPMode == null)
         {
-            var pmode = await Deserializer.ToSendingPMode(encodeInfo.SendingPMode);
-
-            if (pmode == null)
-            {
-                return null;
-            }
-
-            if (pmode.Security?.Signing?.IsEnabled ?? false)
-            {
-                pmode.Security.Signing.SigningCertificateInformation = new PrivateKeyCertificate
-                {
-                    Certificate = Convert.ToBase64String(encodeInfo.SigningCertificate ?? new byte[] { }),
-                    Password = encodeInfo.SigningCertificatePassword
-                };
-            }
-
-            if (pmode.Security?.Encryption?.IsEnabled ?? false)
-            {
-                pmode.Security.Encryption.EncryptionCertificateInformation = new PublicKeyCertificate
-                {
-                    Certificate = Convert.ToBase64String(encodeInfo.EncryptionPublicKeyCertificate ?? new byte[] { })
-                };
-            }
-
-            return pmode;
+            return null;
         }
 
-        private static async Task<AS4Message> AssembleAS4MessageAsync(SendingProcessingMode pmode, IEnumerable<PayloadInfo> payloads)
+        var pmode = await Deserializer.ToSendingPModeAsync(encodeInfo.SendingPMode, cancellation);
+        if (pmode == null)
         {
-            var submitMessage = new SubmitMessage
+            return null;
+        }
+
+        if (pmode.Security?.Signing?.IsEnabled ?? false)
+        {
+            pmode.Security.Signing.SigningCertificateInformation = new PrivateKeyCertificate
             {
-                PMode = pmode,
-                Payloads = payloads.Select(p => new Payload(p.PayloadName, "", p.ContentType)).ToArray()
+                Certificate = Convert.ToBase64String(encodeInfo.SigningCertificate ?? []),
+                Password = encodeInfo.SigningCertificatePassword
             };
-
-            var createAS4MessageStep = new CreateAS4MessageStep(
-                submitPayload => new InMemoryPayloadRetriever(
-                    payloads.First(p => p.PayloadName == submitPayload.Id)));
-
-            var ctx = new MessagingContext(submitMessage) { SendingPMode = pmode };
-            StepResult stepResult = await createAS4MessageStep.ExecuteAsync(ctx);
-            return stepResult.MessagingContext.AS4Message;
         }
 
-        private static MessagingContext SetupMessagingContext(AS4Message as4Message, SendingProcessingMode sendingPMode)
+        if (pmode.Security?.Encryption?.IsEnabled ?? false)
         {
-            var context = new MessagingContext(as4Message, MessagingContextMode.Submit);
-            context.SendingPMode = sendingPMode;
-
-            return context;
+            pmode.Security.Encryption.EncryptionCertificateInformation = new PublicKeyCertificate
+            {
+                Certificate = Convert.ToBase64String(encodeInfo.EncryptionPublicKeyCertificate ?? [])
+            };
         }
 
-        private class InMemoryPayloadRetriever : IPayloadRetriever
+        return pmode;
+    }
+
+    private async Task<AS4Message> AssembleAS4MessageAsync(
+        SendingProcessingMode pmode,
+        IEnumerable<PayloadInfo> payloads,
+        CancellationToken cancellation)
+    {
+        var submitMessage = new SubmitMessage
         {
-            private readonly PayloadInfo _payload;
+            PMode = pmode,
+            Payloads = [.. payloads.Select(p => new Payload(p.PayloadName, "", p.ContentType))]
+        };
 
-            /// <summary>
-            /// Initializes a new instance of the <see cref="InMemoryPayloadRetriever"/> class.
-            /// </summary>
-            public InMemoryPayloadRetriever(PayloadInfo payload)
-            {
-                if (payload == null)
-                {
-                    throw new ArgumentNullException(nameof(payload));
-                }
+        //var createAS4MessageStep = new CreateAS4MessageStep(
+        //    submitPayload => new InMemoryPayloadRetriever(
+        //        payloads.First(p => p.PayloadName == submitPayload.Id)))
 
-                _payload = payload;
-            }
+        var ctx = new MessagingContext(submitMessage) { SendingPMode = pmode };
+        var stepResult = await _createAS4MessageStep.ExecuteAsync(ctx, cancellation);
+        return stepResult.MessagingContext.AS4Message!;
+    }
 
-            /// <summary>
-            /// Retrieve <see cref="Stream"/> contents from a given <paramref name="location"/>.
-            /// </summary>
-            /// <param name="location">The location.</param>
-            /// <returns></returns>
-            public Task<Stream> RetrievePayloadAsync(string location)
-            {
-                return Task.FromResult<Stream>(new MemoryStream(_payload.Content));
-            }
-        }
+    private static MessagingContext SetupMessagingContext(AS4Message as4Message, SendingProcessingMode sendingPMode)
+    {
+        return new(as4Message, MessagingContextMode.Submit)
+        {
+            SendingPMode = sendingPMode
+        };
     }
 }

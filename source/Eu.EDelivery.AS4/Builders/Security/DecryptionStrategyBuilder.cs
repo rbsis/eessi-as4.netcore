@@ -1,62 +1,45 @@
-﻿using System;
-using System.Security.Cryptography.X509Certificates;
+﻿using System.Security.Cryptography.X509Certificates;
 using Eu.EDelivery.AS4.Model.Core;
 using Eu.EDelivery.AS4.Security.Strategies;
 
-namespace Eu.EDelivery.AS4.Builders.Security
+namespace Eu.EDelivery.AS4.Builders.Security;
+
+/// <summary>
+/// Builder used to create an <see cref="DecryptionStrategy"/> instance.
+/// </summary>
+internal class DecryptionStrategyBuilder
 {
-    /// <summary>
-    /// Builder used to create an <see cref="DecryptionStrategy"/> instance.
-    /// </summary>
-    internal class DecryptionStrategyBuilder
+    private readonly AS4Message _message;
+
+    private readonly X509Certificate2 _certificate;
+
+    private DecryptionStrategyBuilder(AS4Message message, X509Certificate2 certificate)
     {
-        private readonly AS4Message _message;
+        _message = message;
+        _certificate = certificate;
+    }
 
-        private X509Certificate2 _certificate;
+    /// <summary>
+    /// Create a builder instance for the given <paramref name="as4Message"/>
+    /// </summary>
+    /// <param name="as4Message"></param>
+    /// <param name="certificate"></param>
+    /// <returns></returns>
+    public static DecryptionStrategyBuilder Create(AS4Message as4Message, X509Certificate2 certificate)
+    {
+        return new DecryptionStrategyBuilder(as4Message, certificate);
+    }
 
-        private DecryptionStrategyBuilder(AS4Message message)
+    /// <summary>
+    /// Build the IDecryptionStrategy implementation.
+    /// </summary>
+    /// <returns></returns>
+    public DecryptionStrategy Build()
+    {
+        if (_message.EnvelopeDocument == null)
         {
-            if (message == null)
-            {
-                throw new ArgumentNullException(nameof(message));
-            }
-
-            _message = message;
+            throw new InvalidOperationException("EnvelopeDocument is missing.");
         }
-
-        /// <summary>
-        /// Create a builder instance for the given <paramref name="as4Message"/>
-        /// </summary>
-        /// <param name="as4Message"></param>
-        /// <returns></returns>
-        public static DecryptionStrategyBuilder Create(AS4Message as4Message)
-        {
-            return new DecryptionStrategyBuilder(as4Message);
-        }
-
-        /// <summary>
-        /// Specify the certificate that must be used to decrypt.
-        /// </summary>
-        /// <param name="certificate"></param>
-        /// <returns></returns>
-        public DecryptionStrategyBuilder WithCertificate(X509Certificate2 certificate)
-        {
-            if (certificate == null)
-            {
-                throw new ArgumentNullException(nameof(certificate));
-            }
-
-            _certificate = certificate;
-            return this;
-        }
-
-        /// <summary>
-        /// Build the IDecryptionStrategy implementation.
-        /// </summary>
-        /// <returns></returns>
-        public DecryptionStrategy Build()
-        {
-            return new DecryptionStrategy(_message.EnvelopeDocument, _message.Attachments, _certificate);
-        }
+        return new DecryptionStrategy(_message.EnvelopeDocument, _message.Attachments, _certificate);
     }
 }

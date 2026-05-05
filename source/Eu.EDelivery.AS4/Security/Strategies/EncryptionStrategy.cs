@@ -1,185 +1,168 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Security.Cryptography.Xml;
 using System.Xml;
 using Eu.EDelivery.AS4.Model.Core;
 using Eu.EDelivery.AS4.Security.Builders;
 using Eu.EDelivery.AS4.Security.Encryption;
 using MimeKit.IO;
-using log4net;
 
-namespace Eu.EDelivery.AS4.Security.Strategies
+namespace Eu.EDelivery.AS4.Security.Strategies;
+
+/// <summary>
+/// An <see cref="CryptoStrategy"/> implementation
+/// responsible for the Encryption of the <see cref="AS4Message"/>
+/// </summary>
+internal class EncryptionStrategy : CryptoStrategy
 {
-    /// <summary>
-    /// An <see cref="CryptoStrategy"/> implementation
-    /// responsible for the Encryption of the <see cref="AS4Message"/>
-    /// </summary>
-    internal class EncryptionStrategy : CryptoStrategy
+    private readonly List<Attachment> _attachments;
+
+    private readonly KeyEncryptionConfiguration _keyEncryptionConfig;
+    private readonly DataEncryptionConfiguration _dataEncryptionConfig;
+
+
+    private readonly List<EncryptedData> _encryptedDatas = [];
+
+    private AS4EncryptedKey? _as4EncryptedKey;
+
+    internal EncryptionStrategy(
+        KeyEncryptionConfiguration keyEncryptionConfig,
+        DataEncryptionConfiguration dataEncryptionConfig,
+        IEnumerable<Attachment> attachments)
     {
-        private readonly List<Attachment> _attachments;
+        _keyEncryptionConfig = keyEncryptionConfig;
+        _dataEncryptionConfig = dataEncryptionConfig;
+        _attachments = [.. attachments];
+    }
 
-        private readonly KeyEncryptionConfiguration _keyEncryptionConfig;
-        private readonly DataEncryptionConfiguration _dataEncryptionConfig;
-        private static readonly ILog Logger = LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
+    /// <summary>
+    /// Appends all encryption elements, such as <see cref="EncryptedKey"/> and <see cref="EncryptedData"/> elements.
+    /// </summary>
+    /// <param name="securityElement"></param>
+    public void AppendEncryptionElements(XmlElement securityElement)
+    {
+        ArgumentNullException.ThrowIfNull(securityElement);
 
-        private readonly List<EncryptedData> _encryptedDatas = new List<EncryptedData>();
-
-        private AS4EncryptedKey _as4EncryptedKey;
-
-        internal EncryptionStrategy(
-            KeyEncryptionConfiguration keyEncryptionConfig,
-            DataEncryptionConfiguration dataEncryptionConfig,
-            IEnumerable<Attachment> attachments)
+        if (securityElement.OwnerDocument == null)
         {
-            _keyEncryptionConfig = keyEncryptionConfig;
-            _dataEncryptionConfig = dataEncryptionConfig;
-            _attachments = attachments.ToList();
+            throw new ArgumentException(@"SecurityHeader needs to have an OwnerDocument", nameof(securityElement));
         }
 
-        /// <summary>
-        /// Appends all encryption elements, such as <see cref="EncryptedKey"/> and <see cref="EncryptedData"/> elements.
-        /// </summary>
-        /// <param name="securityElement"></param>
-        public void AppendEncryptionElements(XmlElement securityElement)
+        var securityDocument = securityElement.OwnerDocument;
+
+        // Add additional elements such as certificate references
+        if (_as4EncryptedKey != null)
         {
-            if (securityElement == null)
-            {
-                throw new ArgumentNullException(nameof(securityElement));
-            }
-
-            if (securityElement.OwnerDocument == null)
-            {
-                throw new ArgumentException(@"SecurityHeader needs to have an OwnerDocument", nameof(securityElement));
-            }
-
-            XmlDocument securityDocument = securityElement.OwnerDocument;
-
-            // Add additional elements such as certificate references
-            if (_as4EncryptedKey != null)
-            {
-                if (_as4EncryptedKey.SecurityTokenReference != null)
-                {
-                    _as4EncryptedKey.SecurityTokenReference.AppendSecurityTokenTo(securityElement, securityDocument);
-                }
-                _as4EncryptedKey.AppendEncryptedKey(securityElement);
-            }
-            else
-            {
-                Logger.Warn("Appending Encryption Elements but there is no AS4 Encrypted Key set.");
-            }
-
-            AppendEncryptedDataElements(securityElement, securityDocument);
+            _as4EncryptedKey.SecurityTokenReference?.AppendSecurityTokenTo(securityElement, securityDocument);
+            _as4EncryptedKey.AppendEncryptedKey(securityElement);
         }
 
-        private void AppendEncryptedDataElements(XmlElement securityElement, XmlDocument securityDocument)
+        AppendEncryptedDataElements(securityElement, securityDocument);
+    }
+
+    private void AppendEncryptedDataElements(XmlElement securityElement, XmlDocument securityDocument)
+    {
+        foreach (var encryptedData in _encryptedDatas)
         {
-            foreach (EncryptedData encryptedData in _encryptedDatas)
-            {
-                XmlElement encryptedDataElement = encryptedData.GetXml();
-                XmlNode importedEncryptedDataNode = securityDocument.ImportNode(encryptedDataElement, deep: true);
+            var encryptedDataElement = encryptedData.GetXml();
+            var importedEncryptedDataNode = securityDocument.ImportNode(encryptedDataElement, deep: true);
 
-                securityElement.AppendChild(importedEncryptedDataNode);
-            }
+            securityElement.AppendChild(importedEncryptedDataNode);
         }
+    }
 
-        /// <summary>
-        /// Encrypts the <see cref="AS4Message"/> and its attachments.
-        /// </summary>
-        public void EncryptMessage()
+    /// <summary>
+    /// Encrypts the <see cref="AS4Message"/> and its attachments.
+    /// </summary>
+    public void EncryptMessage()
+    {
+        _encryptedDatas.Clear();
+
+        var encryptionKey = GenerateSymmetricKey(_dataEncryptionConfig.AlgorithmKeySize);
+        var as4EncryptedKey = GetEncryptedKey(encryptionKey, _keyEncryptionConfig);
+
+        _as4EncryptedKey = as4EncryptedKey;
+
+        using var encryptionAlgorithm = CreateSymmetricAlgorithm(_dataEncryptionConfig.EncryptionMethod, encryptionKey);
+        EncryptAttachmentsWithAlgorithm(as4EncryptedKey, encryptionAlgorithm);
+    }
+
+    private static byte[] GenerateSymmetricKey(int keySize)
+    {
+        using var aes = Aes.Create();
+        aes.KeySize = keySize;
+        aes.GenerateKey();
+
+        return aes.Key;
+    }
+
+    private static AS4EncryptedKey GetEncryptedKey(
+        byte[] symmetricKey,
+        KeyEncryptionConfiguration keyEncryptionConfig)
+    {
+        return
+            AS4EncryptedKey.CreateEncryptedKeyBuilderForKey(symmetricKey, keyEncryptionConfig)
+                           .Build();
+    }
+
+    private void EncryptAttachmentsWithAlgorithm(
+        AS4EncryptedKey encryptedKey,
+        SymmetricAlgorithm encryptionAlgorithm)
+    {
+        foreach (var attachment in _attachments)
         {
-            _encryptedDatas.Clear();
-
-            byte[] encryptionKey = GenerateSymmetricKey(_dataEncryptionConfig.AlgorithmKeySize);
-            AS4EncryptedKey as4EncryptedKey = GetEncryptedKey(encryptionKey, _keyEncryptionConfig);
-
-            _as4EncryptedKey = as4EncryptedKey;
-
-            using (SymmetricAlgorithm encryptionAlgorithm =
-                CreateSymmetricAlgorithm(_dataEncryptionConfig.EncryptionMethod, encryptionKey))
+            var encrypted = EncryptData(attachment.Content, encryptionAlgorithm);
+            var encryptedData = CreateEncryptedDataForAttachment(attachment, encryptedKey);
+            if (encryptedData.Id == null)
             {
-                EncryptAttachmentsWithAlgorithm(as4EncryptedKey, encryptionAlgorithm);
+                continue;
             }
-        }
 
-        private static byte[] GenerateSymmetricKey(int keySize)
+            _encryptedDatas.Add(encryptedData);
+
+            encryptedKey.AddDataReference(encryptedData.Id);
+            attachment.UpdateContent(encrypted, "application/octet-stream");
+        }
+    }
+
+    private EncryptedData CreateEncryptedDataForAttachment(Attachment attachment, AS4EncryptedKey encryptedKey) => new EncryptedDataBuilder()
+        .WithDataEncryptionConfiguration(_dataEncryptionConfig)
+        .WithMimeType(attachment.ContentType)
+        .WithEncryptionKey(encryptedKey)
+        .WithUri(attachment.Id)
+        .Build();
+
+    private Stream EncryptData(Stream secretStream, SymmetricAlgorithm algorithm)
+    {
+        Stream encryptedStream = CreateVirtualStreamOf(secretStream);
+
+        var cryptoStream = new CryptoStream(encryptedStream, algorithm.CreateEncryptor(), CryptoStreamMode.Write);
+        var origMode = algorithm.Mode;
+        var origPadding = algorithm.Padding;
+
+        try
         {
-            using (var rijn = new RijndaelManaged { KeySize = keySize })
-            {
-                return rijn.Key;
-            }
+            algorithm.Mode = Mode;
+            algorithm.Padding = Padding;
+            secretStream.CopyTo(cryptoStream);
         }
-
-        private static AS4EncryptedKey GetEncryptedKey(
-            byte[] symmetricKey,
-            KeyEncryptionConfiguration keyEncryptionConfig)
+        finally
         {
-            return
-                AS4EncryptedKey.CreateEncryptedKeyBuilderForKey(symmetricKey, keyEncryptionConfig)
-                               .Build();
+            cryptoStream.FlushFinalBlock();
+            algorithm.Mode = origMode;
+            algorithm.Padding = origPadding;
         }
 
-        private void EncryptAttachmentsWithAlgorithm(
-            AS4EncryptedKey encryptedKey,
-            SymmetricAlgorithm encryptionAlgorithm)
+        encryptedStream.Position = 0;
+
+        if (Mode != CipherMode.ECB)
         {
-            foreach (Attachment attachment in _attachments)
-            {
-                Stream encrypted = EncryptData(attachment.Content, encryptionAlgorithm);
-                EncryptedData encryptedData = CreateEncryptedDataForAttachment(attachment, encryptedKey);
+            var chainedStream = new ChainedStream();
+            chainedStream.Add(new MemoryStream(algorithm.IV));
+            chainedStream.Add(encryptedStream);
 
-                _encryptedDatas.Add(encryptedData);
-
-                encryptedKey.AddDataReference(encryptedData.Id);
-                attachment.UpdateContent(encrypted, "application/octet-stream");
-            }
+            encryptedStream = chainedStream;
         }
 
-        private EncryptedData CreateEncryptedDataForAttachment(Attachment attachment, AS4EncryptedKey encryptedKey)
-       {
-            return new EncryptedDataBuilder()
-                .WithDataEncryptionConfiguration(_dataEncryptionConfig)
-                .WithMimeType(attachment.ContentType)
-                .WithEncryptionKey(encryptedKey)
-                .WithUri(attachment.Id)
-                .Build();
-        }
-
-        private Stream EncryptData(Stream secretStream, SymmetricAlgorithm algorithm)
-        {
-            Stream encryptedStream = CreateVirtualStreamOf(secretStream);
-
-            var cryptoStream = new CryptoStream(encryptedStream, algorithm.CreateEncryptor(), CryptoStreamMode.Write);
-            CipherMode origMode = algorithm.Mode;
-            PaddingMode origPadding = algorithm.Padding;
-
-            try
-            {
-                algorithm.Mode = Mode;
-                algorithm.Padding = Padding;
-                secretStream.CopyTo(cryptoStream);
-            }
-            finally
-            {
-                cryptoStream.FlushFinalBlock();
-                algorithm.Mode = origMode;
-                algorithm.Padding = origPadding;
-            }
-
-            encryptedStream.Position = 0;
-
-            if (Mode != CipherMode.ECB)
-            {
-                var chainedStream = new ChainedStream();
-                chainedStream.Add(new MemoryStream(algorithm.IV));
-                chainedStream.Add(encryptedStream);
-
-                encryptedStream = chainedStream;
-            }
-
-            return encryptedStream;
-        }
+        return encryptedStream;
     }
 }

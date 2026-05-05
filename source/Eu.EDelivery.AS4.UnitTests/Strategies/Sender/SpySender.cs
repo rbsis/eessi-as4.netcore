@@ -1,109 +1,107 @@
-﻿using System.Linq;
-using System.Threading.Tasks;
-using Eu.EDelivery.AS4.Model.Core;
+﻿using Eu.EDelivery.AS4.Entities;
 using Eu.EDelivery.AS4.Model.Deliver;
 using Eu.EDelivery.AS4.Model.Notify;
 using Eu.EDelivery.AS4.Strategies.Sender;
-using Xunit;
 
-namespace Eu.EDelivery.AS4.UnitTests.Strategies.Sender
+namespace Eu.EDelivery.AS4.UnitTests.Strategies.Sender;
+
+/// <summary>
+/// <see cref="IDeliverSender"/>, <see cref="INotifySender"/> implementation to 'Spy' on the configuration.
+/// </summary>
+internal class SpySender : IDeliverSender, INotifySender
 {
     /// <summary>
-    /// <see cref="IDeliverSender"/>, <see cref="INotifySender"/> implementation to 'Spy' on the configuration.
+    /// Gets a value indicating whether the <see cref="SpySender"/> is called for configuration.
     /// </summary>
-    internal class SpySender : IDeliverSender, INotifySender
+    public bool IsConfigured { get; private set; }
+
+    /// <summary>
+    /// Gets a value indicating whether this instance is delivered.
+    /// </summary>
+    /// <value>
+    ///   <c>true</c> if this instance is delivered; otherwise, <c>false</c>.
+    /// </value>
+    public bool IsDelivered { get; private set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether this instance is notified.
+    /// </summary>
+    /// <value>
+    ///   <c>true</c> if this instance is notified; otherwise, <c>false</c>.
+    /// </value>
+    public bool IsNotified { get; set; }
+
+    /// <summary>
+    /// Configure the <see cref="IDeliverSender"/>
+    /// with a given <paramref name="method"/>
+    /// </summary>
+    /// <param name="method"></param>
+    public void Configure(AS4.Model.PMode.Method method)
     {
-        /// <summary>
-        /// Gets a value indicating whether the <see cref="SpySender"/> is called for configuration.
-        /// </summary>
-        public bool IsConfigured { get; private set; }
-
-        /// <summary>
-        /// Gets a value indicating whether this instance is delivered.
-        /// </summary>
-        /// <value>
-        ///   <c>true</c> if this instance is delivered; otherwise, <c>false</c>.
-        /// </value>
-        public bool IsDelivered { get; private set; }
-
-        /// <summary>
-        /// Gets or sets a value indicating whether this instance is notified.
-        /// </summary>
-        /// <value>
-        ///   <c>true</c> if this instance is notified; otherwise, <c>false</c>.
-        /// </value>
-        public bool IsNotified { get; set; }
-
-        /// <summary>
-        /// Configure the <see cref="Eu.EDelivery.AS4.Strategies.Sender.IDeliverSender"/>
-        /// with a given <paramref name="method"/>
-        /// </summary>
-        /// <param name="method"></param>
-        public void Configure(AS4.Model.PMode.Method method)
-        {
-            IsConfigured = true;
-        }
-
-        /// <summary>
-        /// Start sending the <see cref="DeliverMessage"/>
-        /// </summary>
-        /// <param name="envelope"></param>
-        public Task<SendResult> SendAsync(DeliverMessageEnvelope envelope)
-        {
-            IsDelivered = true;
-            return Task.FromResult(SendResult.Success);
-        }
-
-        /// <summary>
-        /// Start sending the <see cref="NotifyMessage"/>
-        /// </summary>
-        /// <param name="notifyMessage"></param>
-        public Task<SendResult> SendAsync(NotifyMessageEnvelope notifyMessage)
-        {
-            IsNotified = true;
-            return Task.FromResult(SendResult.Success);
-        }
+        IsConfigured = true;
     }
 
-    public class SpySenderFacts
+    /// <summary>
+    /// Start sending the <see cref="DeliverMessage"/>
+    /// </summary>
+    /// <param name="deliverMessageEnvelope"></param>
+    /// <param name="cancellation"></param>
+    public Task<SendResult> SendAsync(DeliverMessageEnvelope deliverMessageEnvelope, CancellationToken cancellation)
     {
-        [Fact]
-        public async Task TestIsDelivered()
-        {
-            // Arrange
-            var sut = new SpySender();
+        IsDelivered = true;
+        return Task.FromResult(SendResult.Success);
+    }
 
-            // Act
-            await sut.SendAsync(new DeliverMessageEnvelope(new DeliverMessage(), "", Enumerable.Empty<Attachment>()));
+    /// <summary>
+    /// Start sending the <see cref="NotifyMessage"/>
+    /// </summary>
+    /// <param name="notifyMessageEnvelope"></param>
+    /// <param name="cancellation"></param>
+    public Task<SendResult> SendAsync(NotifyMessageEnvelope notifyMessageEnvelope, CancellationToken cancellation)
+    {
+        IsNotified = true;
+        return Task.FromResult(SendResult.Success);
+    }
+}
 
-            // Assert
-            Assert.True(sut.IsDelivered);
-        }
+public class SpySenderFacts
+{
+    [Fact]
+    public async Task TestIsDelivered()
+    {
+        // Arrange
+        var sut = new SpySender();
 
-        [Fact]
-        public async Task TestIsNotified()
-        {
-            // Arrange
-            var sut = new SpySender();
+        // Act
+        await sut.SendAsync(new DeliverMessageEnvelope(new DeliverMessage(), "", []), CancellationToken.None);
 
-            // Act
-            await sut.SendAsync(new NotifyMessageEnvelope(null, default(Status), null, null, null));
+        // Assert
+        Assert.True(sut.IsDelivered);
+    }
 
-            // Assert
-            Assert.True(sut.IsNotified);
-        }
+    [Fact]
+    public async Task TestIsNotified()
+    {
+        // Arrange
+        var sut = new SpySender();
 
-        [Fact]
-        public void SpyOnConfigure()
-        {
-            // Arrange
-            var sut = new SpySender();
+        // Act
+        await sut.SendAsync(new NotifyMessageEnvelope(new MessageInfo(), default, [], "", typeof(InMessage)), CancellationToken.None);
 
-            // Act
-            sut.Configure(method: null);
+        // Assert
+        Assert.True(sut.IsNotified);
+    }
 
-            // Assert
-            Assert.True(sut.IsConfigured);
-        }
+    [Fact]
+    public void SpyOnConfigure()
+    {
+        // Arrange
+        var sut = new SpySender();
+
+        // Act
+        sut.Configure(new AS4.Model.PMode.Method());
+
+        // Assert
+        Assert.True(sut.IsConfigured);
     }
 }

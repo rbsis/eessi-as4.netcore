@@ -1,17 +1,16 @@
 ﻿using Eu.EDelivery.AS4.Model.Core;
 using Eu.EDelivery.AS4.Model.Internal;
 
-namespace Eu.EDelivery.AS4.UnitTests.Model
+namespace Eu.EDelivery.AS4.UnitTests.Model;
+
+/// <summary>
+/// Empty <see cref="MessagingContext"/> implementation.
+/// </summary>
+/// <seealso cref="MessagingContext" />
+public class EmptyMessagingContext : MessagingContext
 {
     /// <summary>
-    /// Empty <see cref="MessagingContext"/> implementation.
+    /// Initializes a new instance of the <see cref="EmptyMessagingContext"/> class.
     /// </summary>
-    /// <seealso cref="Eu.EDelivery.AS4.Model.Internal.MessagingContext" />
-    public class EmptyMessagingContext : MessagingContext
-    {
-        /// <summary>
-        /// Initializes a new instance of the <see cref="EmptyMessagingContext"/> class.
-        /// </summary>
-        public EmptyMessagingContext() : base(as4Message: AS4Message.Empty, mode: MessagingContextMode.Unknown) { }
-    }
+    public EmptyMessagingContext() : base(as4Message: AS4Message.Empty, mode: MessagingContextMode.Unknown) { }
 }

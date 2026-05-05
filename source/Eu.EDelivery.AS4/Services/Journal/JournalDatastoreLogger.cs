@@ -1,93 +1,62 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Eu.EDelivery.AS4.Extensions;
-using Eu.EDelivery.AS4.Common;
-using log4net;
+﻿using Eu.EDelivery.AS4.Repositories;
+using Microsoft.Extensions.Logging;
 
-namespace Eu.EDelivery.AS4.Services.Journal
+namespace Eu.EDelivery.AS4.Services.Journal;
+
+/// <summary>
+/// Journal logger implementation that writes journal entries to the datastore.
+/// </summary>
+public class JournalDatastoreLogger : IJournalLogger
 {
+    private readonly ILogger<JournalDatastoreLogger> _logger;
+    private readonly IDatastoreRepository _repository;
+
     /// <summary>
-    /// Journal logger implementation that writes journal entries to the datastore.
+    /// Initializes a new instance of the <see cref="JournalDatastoreLogger"/> class.
     /// </summary>
-    internal class JournalDatastoreLogger : IJournalLogger
+    public JournalDatastoreLogger(ILogger<JournalDatastoreLogger> logger, IDatastoreRepository repository)
     {
-        private readonly Func<DatastoreContext> _createDatastore;
+        _logger = logger;
+        _repository = repository;
+    }
 
-        private static readonly ILog Logger = LogManager.GetLogger( System.Reflection.MethodBase.GetCurrentMethod().DeclaringType );
+    /// <summary>
+    /// Writes out a given journal log <paramref name="entries"/>.
+    /// </summary>
+    /// <param name="entries">The entries that must be written.</param>
+    /// <param name="cancellation"></param>
+    public async Task WriteLogEntriesAsync(IEnumerable<JournalLogEntry> entries, CancellationToken cancellation)
+    {
+        var entities = entries.Select(CreateJournalRecord);
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="JournalDatastoreLogger"/> class.
-        /// </summary>
-        public JournalDatastoreLogger(Func<DatastoreContext> createDatastore)
+        await _repository.InsertJournalsAsync(entities, cancellation);
+    }
+
+    private Entities.Journal CreateJournalRecord(JournalLogEntry entry)
+    {
+        var entity = new Entities.Journal
         {
-            if (createDatastore == null)
-            {
-                throw new ArgumentNullException(nameof(createDatastore));
-            }
+            EbmsMessageId = entry.EbmsMessageId,
+            RefToEbmsMessageId = entry.RefToMessageId,
+            Action = entry.Action,
+            Service = entry.Service,
+            FromParty = entry.FromParty,
+            ToParty = entry.ToParty,
+            LogEntry = string.Join(Environment.NewLine, entry.LogEntries),
+            LogDate = DateTimeOffset.Now,
+            AgentName = entry.AgentName ?? string.Empty,
+            AgentType = entry.AgentType.HasValue ? entry.AgentType.Value.ToString() : string.Empty
+        };
 
-            _createDatastore = createDatastore;
-        }
+        var ebmsMessageId = entry.EbmsMessageId == null
+            ? string.Empty
+            : "EbmsMessageId=" + entry.EbmsMessageId;
 
-        /// <summary>
-        /// Writes out a given journal log <paramref name="entries"/>.
-        /// </summary>
-        /// <param name="entries">The entries that must be written.</param>
-        public async Task WriteLogEntriesAsync(IEnumerable<JournalLogEntry> entries)
-        {
-            if (entries == null)
-            {
-                throw new ArgumentNullException(nameof(entries));
-            }
+        var refToMessageId = entry.RefToMessageId == null
+            ? string.Empty
+            : "RefToMessageId=" + entry.RefToMessageId;
 
-            if (!entries.Any())
-            {
-                return;
-            }
-
-            using (DatastoreContext db = _createDatastore())
-            {
-                db.Journal.AddRange(
-                    entries.Where(e => e != null)
-                           .Select(CreateJournalRecord));
-
-                await db.SaveChangesAsync(acceptAllChangesOnSuccess: false);
-            }
-        }
-
-        private static Entities.Journal CreateJournalRecord(JournalLogEntry entry)
-        {
-            var entity = new Entities.Journal
-            {
-                EbmsMessageId = entry.EbmsMessageId,
-                RefToEbmsMessageId = entry.RefToMessageId,
-                Action = entry.Action,
-                Service = entry.Service,
-                FromParty = entry.FromParty,
-                ToParty = entry.ToParty,
-                LogEntry = String.Join(Environment.NewLine, entry.LogEntries),
-                LogDate = DateTimeOffset.Now,
-                AgentName = entry.AgentName
-            };
-
-            if (entry.AgentType.HasValue)
-            {
-                entity.SetAgentType(entry.AgentType.Value);
-            }
-
-            string ebmsMessageId =
-                entry.EbmsMessageId == null
-                    ? String.Empty
-                    : "EbmsMessageId=" + entry.EbmsMessageId;
-
-            string refToMessageId =
-                entry.RefToMessageId == null
-                    ? String.Empty
-                    : "RefToMessageId=" + entry.RefToMessageId;
-
-            Logger.Trace($"Add Journal entry for message {{{String.Join(", ", ebmsMessageId, refToMessageId)}}}");
-            return entity;
-        }
+        _logger.LogTrace("Add Journal entry for message {MessageId}", string.Join(", ", ebmsMessageId, refToMessageId));
+        return entity;
     }
 }

@@ -1,63 +1,46 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using System.Text;
 using FluentValidation.Results;
-using log4net;
 
-namespace Eu.EDelivery.AS4.Validators
+namespace Eu.EDelivery.AS4.Validators;
+
+public static class ValidationResultExtension
 {
-    public static class ValidationResultExtension
+    public static IEnumerable<string> GetValidationErrors(this ValidationResult result)
     {
-        /// <summary>
-        /// Logs the errors.
-        /// </summary>
-        /// <param name="result">The result.</param>
-        /// <param name="logger">The logger.</param>
-        public static void LogErrors(this ValidationResult result, ILog logger)
+        foreach (var e in result.Errors)
         {
-            foreach (string errorMessage in GetValidationErrors(result))
-            {
-                logger.Error(errorMessage);
-            }
+            yield return $"Validation Error: {e.PropertyName} = {e.ErrorMessage}";
+        }
+    }
+
+    public static string AppendValidationErrorsToErrorMessage(this ValidationResult result, string errorMessage)
+    {
+        var sb = new StringBuilder(errorMessage);
+
+        foreach (var validationError in result.GetValidationErrors())
+        {
+            sb.AppendLine(validationError);
         }
 
-        public static IEnumerable<string> GetValidationErrors(this ValidationResult result)
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Results the specified happy path.
+    /// </summary>
+    /// <param name="result">The result.</param>
+    /// <param name="onValidationSuccess">The happy path.</param>
+    /// <param name="onValidationFailed">The unhappy path.</param>
+    /// <exception cref="Exception">A delegate callback throws an exception.</exception>
+    public static void Result(this ValidationResult result, Action<ValidationResult> onValidationSuccess, Action<ValidationResult> onValidationFailed)
+    {
+        if (result.IsValid)
         {
-            foreach (ValidationFailure e in result.Errors)
-            {
-                yield return $"Validation Error: {e.PropertyName} = {e.ErrorMessage}";
-            }
+            onValidationSuccess(result);
         }
-
-        public static string AppendValidationErrorsToErrorMessage(this ValidationResult result, string errorMessage)
+        else
         {
-            StringBuilder sb = new StringBuilder(errorMessage);
-
-            foreach (string validationError in result.GetValidationErrors())
-            {
-                sb.AppendLine(validationError);
-            }
-
-            return sb.ToString();
-        }
-
-        /// <summary>
-        /// Results the specified happy path.
-        /// </summary>
-        /// <param name="result">The result.</param>
-        /// <param name="onValidationSuccess">The happy path.</param>
-        /// <param name="onValidationFailed">The unhappy path.</param>
-        /// <exception cref="Exception">A delegate callback throws an exception.</exception>
-        public static void Result(this ValidationResult result, Action<ValidationResult> onValidationSuccess, Action<ValidationResult> onValidationFailed)
-        {
-            if (result.IsValid)
-            {
-                onValidationSuccess(result);
-            }
-            else
-            {
-                onValidationFailed(result);
-            }
+            onValidationFailed(result);
         }
     }
 }

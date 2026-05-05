@@ -1,44 +1,57 @@
-﻿using System;
-using System.Linq.Expressions;
+﻿using System.Linq.Expressions;
+using Eu.EDelivery.AS4.Model.Core;
 using Eu.EDelivery.AS4.Repositories;
 using Moq;
-using Xunit;
 
-namespace Eu.EDelivery.AS4.UnitTests.Repositories
+namespace Eu.EDelivery.AS4.UnitTests.Repositories;
+
+public class GivenAS4MessageStoreProviderFacts
 {
-    public class GivenAS4MessageStoreProviderFacts
+    [Fact]
+    public void SpyPersisterGetsCalledIfSaveBody()
     {
+        TestProviderWithAcceptedPersister(
+           sut => sut.SaveAS4Message("ignored location", AS4Message.Empty),
+           spy => spy.SaveAS4Message(It.IsAny<string>(), AS4Message.Empty));
+    }
 
-        [Fact]
-        public void SpyPersisterGetsCalled_IfSaveBody()
-        {
-            TestProviderWithAcceptedPersister(
-               sut => sut.SaveAS4Message("ignored location", null),
-               spy => spy.SaveAS4Message(It.IsAny<string>(), null));
-        }
+    [Fact]
+    public void SpyPersisterGetsCalledIfUpdateBody()
+    {
+        TestProviderWithAcceptedPersister(
+            sut => sut.UpdateAS4Message("ignored location", AS4Message.Empty),
+            spy => spy.UpdateAS4Message(It.IsAny<string>(), AS4Message.Empty));
+    }
 
-        [Fact]
-        public void SpyPersisterGetsCalled_IfUpdateBody()
-        {
-            TestProviderWithAcceptedPersister(
-                sut => sut.UpdateAS4Message("ignored location", null),
-                spy => spy.UpdateAS4Message(It.IsAny<string>(), null));
-        }
+    [Fact]
+    public async Task ExpectedMessageBodyStores()
+    {
+        // Arrange
+        const string AcceptedString = "find this string";
+        var spyStore = Mock.Of<IAS4MessageBodyStore>();
+        var sut = new AS4MessageStoreProvider();
+        sut.Accept(s => s.Equals(AcceptedString), spyStore);
 
-        private static void TestProviderWithAcceptedPersister(
-            Action<MessageBodyStore> act,
-            Expression<Action<IAS4MessageBodyStore>> assertion)
-        {
-            // Arrange
-            var spyPersister = Mock.Of<IAS4MessageBodyStore>();
-            var sut = new MessageBodyStore();
-            sut.Accept(location => true, spyPersister);
+        // Act
+        await sut.LoadMessageBodyAsync(AcceptedString, CancellationToken.None);
 
-            // Act
-            act(sut);
+        // Assert
+        Mock.Get(spyStore).Verify(s => s.LoadMessageBodyAsync(It.IsAny<string>(), CancellationToken.None), Times.Once);
+    }
 
-            // Assert
-            Mock.Get(spyPersister).Verify(assertion, Times.Once);
-        }
+    private static void TestProviderWithAcceptedPersister(
+        Action<AS4MessageStoreProvider> act,
+        Expression<Action<IAS4MessageBodyStore>> assertion)
+    {
+        // Arrange
+        var spyStore = Mock.Of<IAS4MessageBodyStore>();
+        var sut = new AS4MessageStoreProvider();
+        sut.Accept(location => true, spyStore);
+
+        // Act
+        act(sut);
+
+        // Assert
+        Mock.Get(spyStore).Verify(assertion, Times.Once);
     }
 }

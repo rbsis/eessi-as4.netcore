@@ -1,24 +1,24 @@
-using System.Threading.Tasks;
+﻿using Eu.EDelivery.AS4.Http.Response;
 
-namespace Eu.EDelivery.AS4.Steps.Send.Response
+namespace Eu.EDelivery.AS4.Steps.Send.Response;
+
+/// <summary>
+/// <see cref="IAS4ResponseHandler" /> implementation that can be used as the 'Tail' of the chain of
+/// <see cref="IAS4ResponseHandler" />.
+/// </summary>
+internal sealed class TailResponseHandler : IAS4ResponseHandler
 {
     /// <summary>
-    /// <see cref="IAS4ResponseHandler" /> implementation that can be used as the 'Tail' of the chain of
-    /// <see cref="IAS4ResponseHandler" />.
+    /// Handle the given <paramref name="response" />, but delegate to the next handler if you can't.
     /// </summary>
-    internal sealed class TailResponseHandler : IAS4ResponseHandler
+    /// <param name="response"></param>
+    /// <returns></returns>
+    /// <param name="cancellation"></param>
+    public Task<StepResult> HandleResponseAsync(IAS4Response response, CancellationToken cancellation)
     {
-        /// <summary>
-        /// Handle the given <paramref name="response" />, but delegate to the next handler if you can't.
-        /// </summary>
-        /// <param name="response"></param>
-        /// <returns></returns>
-        public Task<StepResult> HandleResponse(IAS4Response response)
-        {
-            response.OriginalRequest.ModifyContext(response.ReceivedStream, response.OriginalRequest.Mode);
-            response.OriginalRequest.ModifyContext(response.ReceivedAS4Message);
-            
-            return StepResult.SuccessAsync(response.OriginalRequest);
-        }
+        response.OriginalRequest.ModifyContext(response.ReceivedStream, response.OriginalRequest.Mode);
+        response.OriginalRequest.ModifyContext(response.ReceivedAS4Message);
+
+        return StepResult.SuccessAsync(response.OriginalRequest);
     }
 }

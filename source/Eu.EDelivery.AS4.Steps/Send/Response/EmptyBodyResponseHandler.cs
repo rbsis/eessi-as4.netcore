@@ -1,65 +1,64 @@
-﻿using System;
-using System.IO;
-using System.Net;
-using System.Threading.Tasks;
-using Eu.EDelivery.AS4.Common;
+﻿using System.Net;
+using Eu.EDelivery.AS4.Http.Response;
 using Eu.EDelivery.AS4.Model.Internal;
-using log4net;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
-namespace Eu.EDelivery.AS4.Steps.Send.Response
+namespace Eu.EDelivery.AS4.Steps.Send.Response;
+
+/// <summary>
+/// <see cref="IAS4ResponseHandler"/> implementation to handle the response for a empty body.
+/// </summary>
+internal sealed class EmptyBodyResponseHandler : IAS4ResponseHandler
 {
+    private readonly ILogger<EmptyBodyResponseHandler> _logger;
+    private readonly IAS4ResponseHandler _nextHandler;
+
     /// <summary>
-    /// <see cref="IAS4ResponseHandler"/> implementation to handle the response for a empty body.
+    /// Initializes a new instance of the <see cref="EmptyBodyResponseHandler"/> class.
     /// </summary>
-    internal sealed class EmptyBodyResponseHandler : IAS4ResponseHandler
+    /// <param name="logger"></param>
+    /// <param name="nextHandler">The next Handler.</param>
+    public EmptyBodyResponseHandler(
+        ILogger<EmptyBodyResponseHandler> logger,
+        [FromKeyedServices(typeof(TailResponseHandler))] IAS4ResponseHandler nextHandler)
     {
-        private readonly IAS4ResponseHandler _nextHandler;
+        _nextHandler = nextHandler;
+        _logger = logger;
+    }
 
-        private static readonly ILog Logger = LogManager.GetLogger( System.Reflection.MethodBase.GetCurrentMethod().DeclaringType );
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="EmptyBodyResponseHandler"/> class.
-        /// </summary>
-        /// <param name="nextHandler">The next Handler.</param>
-        public EmptyBodyResponseHandler(IAS4ResponseHandler nextHandler)
+    /// <summary>
+    /// Handle the given <paramref name="response" />, but delegate to the next handler if you can't.
+    /// </summary>
+    /// <param name="response"></param>
+    /// <returns></returns>
+    /// <param name="cancellation"></param>
+    public async Task<StepResult> HandleResponseAsync(IAS4Response response, CancellationToken cancellation)
+    {
+        if (response.ReceivedAS4Message.IsEmpty)
         {
-            _nextHandler = nextHandler;
-        }
-
-        /// <summary>
-        /// Handle the given <paramref name="response" />, but delegate to the next handler if you can't.
-        /// </summary>
-        /// <param name="response"></param>
-        /// <returns></returns>
-        public async Task<StepResult> HandleResponse(IAS4Response response)
-        {
-            if (response.ReceivedAS4Message.IsEmpty)
+            if (response.StatusCode == HttpStatusCode.Accepted)
             {
-                if (response.StatusCode == HttpStatusCode.Accepted)
-                {
-                    response.OriginalRequest.ModifyContext(response.ReceivedAS4Message, MessagingContextMode.Send);
-                    return StepResult.Success(response.OriginalRequest).AndStopExecution();
-                }
-
-                Logger.Error($"Response with HTTP status: {Config.Encode(response.StatusCode)}");
-
-                if (Logger.IsErrorEnabled)
-                {
-                    using (var r = new StreamReader(response.ReceivedStream.UnderlyingStream))
-                    {
-                        string content = await r.ReadToEndAsync();
-                        if (!string.IsNullOrEmpty(content))
-                        {
-                            Logger.Error("Response with HTTP content: " + Config.Encode(content));
-                        }
-                    }
-                }
-
-                response.OriginalRequest.ModifyContext(response.ReceivedStream, MessagingContextMode.Send);
-                return StepResult.Failed(response.OriginalRequest).AndStopExecution();
+                response.OriginalRequest.ModifyContext(response.ReceivedAS4Message, MessagingContextMode.Send);
+                return (await StepResult.SuccessAsync(response.OriginalRequest)).AndStopExecution();
             }
 
-            return await _nextHandler.HandleResponse(response);
+            _logger.LogError("Response with HTTP status: {StatusCode}", response.StatusCode);
+
+            if (_logger.IsEnabled(LogLevel.Error))
+            {
+                using var r = new StreamReader(response.ReceivedStream.UnderlyingStream);
+                var content = await r.ReadToEndAsync(cancellation);
+                if (!string.IsNullOrEmpty(content))
+                {
+                    _logger.LogError("Response with HTTP content: {Content}", content);
+                }
+            }
+
+            response.OriginalRequest.ModifyContext(response.ReceivedStream, MessagingContextMode.Send);
+            return (await StepResult.FailedAsync(response.OriginalRequest)).AndStopExecution();
         }
+
+        return await _nextHandler.HandleResponseAsync(response, cancellation);
     }
 }

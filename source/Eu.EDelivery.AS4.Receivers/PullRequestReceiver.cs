@@ -1,113 +1,106 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-using Eu.EDelivery.AS4.Common;
+﻿using Eu.EDelivery.AS4.Common;
 using Eu.EDelivery.AS4.Extensions;
 using Eu.EDelivery.AS4.Model.Internal;
-using Eu.EDelivery.AS4.Model.PMode;
 using Eu.EDelivery.AS4.Receivers.PullRequest;
 using Eu.EDelivery.AS4.Serialization;
-using log4net;
+using Microsoft.Extensions.Logging;
 
-namespace Eu.EDelivery.AS4.Receivers
+namespace Eu.EDelivery.AS4.Receivers;
+
+/// <summary>
+/// <see cref="IReceiver" /> implementation to pull exponentially for Pull Requests.
+/// </summary>
+public class PullRequestReceiver : ExponentialIntervalReceiver<PModePullRequest>
 {
+    private readonly IConfig _configuration;
+
+    private Func<PModePullRequest, Task<MessagingContext>>? _messageCallback;
+
     /// <summary>
-    /// <see cref="IReceiver" /> implementation to pull exponentially for Pull Requests.
+    /// Initializes a new instance of the <see cref="PullRequestReceiver" /> class.
     /// </summary>
-    public class PullRequestReceiver : ExponentialIntervalReceiver<PModePullRequest>
+    /// <param name="logger"></param>
+    /// <param name="configuration"><see cref="IConfig" /> implementation to collection PModes.</param>
+    public PullRequestReceiver(ILogger<PullRequestReceiver> logger, IConfig configuration) : base(logger)
     {
-        private readonly IConfig _configuration;
+        _configuration = configuration;
+    }
 
-        private Func<PModePullRequest, Task<MessagingContext>> _messageCallback;
-
-        private static readonly ILog Logger = LogManager.GetLogger( System.Reflection.MethodBase.GetCurrentMethod().DeclaringType );
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="PullRequestReceiver" /> class.
-        /// </summary>
-        public PullRequestReceiver() : this(Config.Instance) {}
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="PullRequestReceiver" /> class.
-        /// </summary>
-        /// <param name="configuration"><see cref="IConfig" /> implementation to collection PModes.</param>
-        public PullRequestReceiver(IConfig configuration)
+    /// <summary>
+    /// Configure the receiver with a given settings dictionary.
+    /// </summary>
+    /// <param name="settings"></param>
+    public override void Configure(IEnumerable<Setting> settings)
+    {
+        foreach (var setting in settings)
         {
-            if (configuration == null)
+            if (!_configuration.ContainsSendingPMode(setting.Key))
             {
-                throw new ArgumentNullException(nameof(configuration));
+                _logger.LogWarning("Configured SendingPMode {Key} could not be found", setting.Key);
+                continue;
             }
 
-            _configuration = configuration;
-        }
+            var pmode = _configuration.GetSendingPMode(setting.Key);
+            var minTimeSpan = setting["tmin"].AsTimeSpan();
+            var maxTimeSpan = setting["tmax"].AsTimeSpan();
 
-        /// <summary>
-        /// Configure the receiver with a given settings dictionary.
-        /// </summary>
-        /// <param name="settings"></param>
-        public override void Configure(IEnumerable<Setting> settings)
-        {
-            if (settings == null)
+            if (minTimeSpan != default && maxTimeSpan != default)
             {
-                throw new ArgumentNullException(nameof(settings));
+                var pullRequest = new PModePullRequest(pmode!, minTimeSpan, maxTimeSpan);
+                AddIntervalRequest(pullRequest);
             }
         }
+    }
 
-        /// <summary>
-        /// Start receiving on a configured Target
-        /// Received messages will be send to the given Callback
-        /// </summary>
-        /// <param name="messageCallback"></param>
-        /// <param name="cancellationToken"></param>
-        /// <exception cref="Exception">A delegate callback throws an exception.</exception>
-        public override void StartReceiving(
-            Func<ReceivedMessage, CancellationToken, Task<MessagingContext>> messageCallback,
-            CancellationToken cancellationToken)
+    /// <summary>
+    /// Start receiving on a configured Target
+    /// Received messages will be send to the given Callback
+    /// </summary>
+    /// <param name="messageCallback"></param>
+    /// <param name="cancellationToken"></param>
+    /// <exception cref="Exception">A delegate callback throws an exception.</exception>
+    public override void StartReceiving(
+        Func<ReceivedMessage, CancellationToken, Task<MessagingContext>> messageCallback,
+        CancellationToken cancellationToken)
+    {
+        _messageCallback = async message =>
         {
-            if (messageCallback == null)
-            {
-                throw new ArgumentNullException(nameof(messageCallback));
-            }
+            var receivedMessage = new ReceivedMessage(
+                underlyingStream: await AS4XmlSerializer.ToStreamAsync(message.PMode, cancellationToken),
+                contentType: Constants.ContentTypes.Soap,
+                origin: message.PMode?.PushConfiguration?.Protocol?.Url ?? "unknown");
 
-            _messageCallback = async message =>
-            {
-                var receivedMessage = new ReceivedMessage(
-                    underlyingStream: await AS4XmlSerializer.ToStreamAsync(message.PMode), 
-                    contentType: Constants.ContentTypes.Soap,
-                    origin: message.PMode?.PushConfiguration?.Protocol?.Url ?? "unknown");
+            return await messageCallback(receivedMessage, cancellationToken);
+        };
 
-                return await messageCallback(receivedMessage, cancellationToken);
-            };
+        // Wait some time till the Kernel is fully started
+        Thread.Sleep(TimeSpan.FromSeconds(5));
 
-            // Wait some time till the Kernel is fully started
-            Thread.Sleep(TimeSpan.FromSeconds(5));
+        StartInterval();
+    }
 
-            StartInterval();
+    /// <summary>
+    /// <paramref name="intervalPullRequest" /> is received.
+    /// </summary>
+    /// <param name="intervalPullRequest"></param>
+    /// <returns></returns>
+    /// <exception cref="Exception">A delegate callback throws an exception.</exception>
+    protected override async Task<Interval> OnRequestReceived(PModePullRequest intervalPullRequest)
+    {
+        var resultedMessage = await _messageCallback!(intervalPullRequest);
+
+        try
+        {
+            var isUserMessage = resultedMessage.AS4Message?.IsUserMessage == true;
+            var intervalResult = isUserMessage ? Interval.Reset : Interval.Increase;
+            var message = $"PullRequest result in {(isUserMessage ? "UserMessage" : "Error")} next interval will be " + "\"{intervalResult}\"";
+            _logger.LogInformation(message, isUserMessage, intervalResult);
+
+            return intervalResult;
         }
-
-        /// <summary>
-        /// <paramref name="intervalPullRequest" /> is received.
-        /// </summary>
-        /// <param name="intervalPullRequest"></param>
-        /// <returns></returns>
-        /// <exception cref="Exception">A delegate callback throws an exception.</exception>
-        protected override async Task<Interval> OnRequestReceived(PModePullRequest intervalPullRequest)
+        finally
         {
-            MessagingContext resultedMessage = await _messageCallback(intervalPullRequest).ConfigureAwait(false);
-
-            try
-            {
-                bool isUserMessage = resultedMessage.AS4Message?.IsUserMessage == true;
-                Interval intervalResult = isUserMessage ? Interval.Reset : Interval.Increase;
-                Logger.Info($"PullRequest result in {Config.Encode((isUserMessage ? "UserMessage" : "Error"))} next interval will be \"{Config.Encode(intervalResult)}\"");
-
-                return intervalResult;
-            }
-            finally
-            {
-                resultedMessage?.Dispose();
-            }
+            resultedMessage?.Dispose();
         }
     }
 }

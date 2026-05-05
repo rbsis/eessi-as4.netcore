@@ -1,8 +1,7 @@
-namespace Eu.EDelivery.AS4.Model.PMode
+﻿namespace Eu.EDelivery.AS4.Model.PMode;
+
+public enum MessageExchangePattern
 {
-    public enum MessageExchangePattern
-    {
-        OneWay,
-        TwoWay
-    }
+    OneWay,
+    TwoWay
 }

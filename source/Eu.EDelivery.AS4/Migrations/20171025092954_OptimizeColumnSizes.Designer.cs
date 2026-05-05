@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Migrations;
-using Eu.EDelivery.AS4.Common;
+using Eu.EDelivery.AS4.Entities;
 
 namespace Eu.EDelivery.AS4.Migrations
 {

@@ -1,150 +1,145 @@
-﻿using System;
-using System.Linq;
-using System.Threading.Tasks;
-using Eu.EDelivery.AS4.Entities;
+﻿using Eu.EDelivery.AS4.Entities;
 using Eu.EDelivery.AS4.Extensions;
 using Eu.EDelivery.AS4.UnitTests.Common;
-using Xunit;
 
-namespace Eu.EDelivery.AS4.UnitTests.Entities
+namespace Eu.EDelivery.AS4.UnitTests.Entities;
+
+public class GivenOutMessagePersistenceFacts : GivenDatastoreFacts
 {
-    public class GivenOutMessagePersistenceFacts : GivenDatastoreFacts
+    [Fact]
+    public async Task OutMessageOperationIsCorrectlyPersisted()
     {
-        [Fact]
-        public async Task OutMessageOperationIsCorrectlyPersisted()
+        long savedInMessageId;
+
+        using (var db = GetDataStoreContext())
         {
-            long savedInMessageId;
+            var outMessage = new OutMessage(Guid.NewGuid().ToString()) { Operation = Operation.Sent };
 
-            using (var db = GetDataStoreContext())
-            {
-                var outMessage = new OutMessage(Guid.NewGuid().ToString()) { Operation = Operation.Sent };
+            db.OutMessages.Add(outMessage);
 
-                db.OutMessages.Add(outMessage);
+            await db.SaveChangesAsync();
 
-                await db.SaveChangesAsync();
+            savedInMessageId = outMessage.Id;
 
-                savedInMessageId = outMessage.Id;
-
-                Assert.NotEqual(default(long), savedInMessageId);
-            }
-
-            using (var db = GetDataStoreContext())
-            {
-                var message = db.OutMessages.FirstOrDefault(i => i.Id == savedInMessageId);
-
-                Assert.NotNull(message);
-                Assert.Equal(Operation.Sent, message.Operation);
-            }
+            Assert.NotEqual(default, savedInMessageId);
         }
 
-        [Fact]
-        public async Task OutMessageStatusIsCorrectlyPersisted()
+        using (var db = GetDataStoreContext())
         {
-            long savedInMessageId;
+            var message = db.OutMessages.FirstOrDefault(i => i.Id == savedInMessageId);
 
-            using (var db = this.GetDataStoreContext())
-            {
-                var msg = new OutMessage("ebmsMessageId");
-                msg.SetStatus(OutStatus.Ack);
+            Assert.NotNull(message);
+            Assert.Equal(Operation.Sent, message.Operation);
+        }
+    }
 
-                db.OutMessages.Add(msg);
+    [Fact]
+    public async Task OutMessageStatusIsCorrectlyPersisted()
+    {
+        long savedInMessageId;
 
-                await db.SaveChangesAsync();
+        using (var db = this.GetDataStoreContext())
+        {
+            var msg = new OutMessage("ebmsMessageId");
+            msg.SetStatus(OutStatus.Ack);
 
-                savedInMessageId = msg.Id;
+            db.OutMessages.Add(msg);
 
-                Assert.NotEqual(default(long), savedInMessageId);
-            }
+            await db.SaveChangesAsync();
 
-            using (var db = this.GetDataStoreContext())
-            {
-                var msg = db.OutMessages.FirstOrDefault(i => i.Id == savedInMessageId);
+            savedInMessageId = msg.Id;
 
-                Assert.NotNull(msg);
-                Assert.Equal(OutStatus.Ack, msg.Status.ToEnum<OutStatus>());
-            }
+            Assert.NotEqual(default, savedInMessageId);
         }
 
-        [Fact]
-        public async Task OutMessageMessageTypeIsCorrectlyPersisted()
+        using (var db = this.GetDataStoreContext())
         {
-            long savedId;
+            var msg = db.OutMessages.FirstOrDefault(i => i.Id == savedInMessageId);
 
-            using (var db = this.GetDataStoreContext())
-            {
-                var message = new OutMessage("message-id") { EbmsMessageType = MessageType.Receipt };
+            Assert.NotNull(msg);
+            Assert.Equal(OutStatus.Ack, msg.Status.ToEnum<OutStatus>());
+        }
+    }
 
-                db.OutMessages.Add(message);
+    [Fact]
+    public async Task OutMessageMessageTypeIsCorrectlyPersisted()
+    {
+        long savedId;
 
-                await db.SaveChangesAsync();
+        using (var db = this.GetDataStoreContext())
+        {
+            var message = new OutMessage("message-id") { EbmsMessageType = MessageType.Receipt };
 
-                savedId = message.Id;
+            db.OutMessages.Add(message);
 
-                Assert.NotEqual(default(long), savedId);
-            }
+            await db.SaveChangesAsync();
 
-            using (var db = this.GetDataStoreContext())
-            {
-                var message = db.OutMessages.FirstOrDefault(i => i.Id == savedId);
+            savedId = message.Id;
 
-                Assert.NotNull(message);
-                Assert.Equal(MessageType.Receipt, message.EbmsMessageType);
-            }
+            Assert.NotEqual(default, savedId);
         }
 
-        [Fact]
-        public async Task EbmsMessageIdIsCorrectlyPersisted()
+        using (var db = this.GetDataStoreContext())
         {
-            long savedId;
+            var message = db.OutMessages.FirstOrDefault(i => i.Id == savedId);
 
-            using (var db = GetDataStoreContext())
-            {
-                var message = new OutMessage("some-message-id");
+            Assert.NotNull(message);
+            Assert.Equal(MessageType.Receipt, message.EbmsMessageType);
+        }
+    }
 
-                db.OutMessages.Add(message);
+    [Fact]
+    public async Task EbmsMessageIdIsCorrectlyPersisted()
+    {
+        long savedId;
 
-                await db.SaveChangesAsync();
+        using (var db = GetDataStoreContext())
+        {
+            var message = new OutMessage("some-message-id");
 
-                savedId = message.Id;
-            }
+            db.OutMessages.Add(message);
 
-            using (var db = this.GetDataStoreContext())
-            {
-                var message = db.OutMessages.FirstOrDefault(i => i.Id == savedId);
+            await db.SaveChangesAsync();
 
-                Assert.NotNull(message);
-                Assert.Equal("some-message-id", message.EbmsMessageId);
-            }
+            savedId = message.Id;
         }
 
-        [Fact]
-        public async Task PModeInformationIsCorrectlyPersisted()
+        using (var db = this.GetDataStoreContext())
         {
-            long savedId;
+            var message = db.OutMessages.FirstOrDefault(i => i.Id == savedId);
 
-            const string pmodeId = "pmodeId";
-            const string pmodeContent = "<pmode><id>pmodeId</id></pmode>";
+            Assert.NotNull(message);
+            Assert.Equal("some-message-id", message.EbmsMessageId);
+        }
+    }
 
-            using (var db = GetDataStoreContext())
-            {
-                var message = new OutMessage("some-message-id");
-                message.SetPModeInformation(pmodeId, pmodeContent);
+    [Fact]
+    public async Task PModeInformationIsCorrectlyPersisted()
+    {
+        long savedId;
 
-                db.OutMessages.Add(message);
+        const string PModeId = "pmodeId";
+        const string PModeContent = "<pmode><id>pmodeId</id></pmode>";
 
-                await db.SaveChangesAsync();
+        using (var db = GetDataStoreContext())
+        {
+            var message = new OutMessage("some-message-id");
+            message.SetPModeInformation(PModeId, PModeContent);
 
-                savedId = message.Id;
-            }
+            db.OutMessages.Add(message);
 
-            using (var db = this.GetDataStoreContext())
-            {
-                var message = db.OutMessages.FirstOrDefault(i => i.Id == savedId);
+            await db.SaveChangesAsync();
 
-                Assert.NotNull(message);
-                Assert.Equal(pmodeId, message.PModeId);
-                Assert.Equal(pmodeContent, message.PMode);
-            }
+            savedId = message.Id;
+        }
+
+        using (var db = this.GetDataStoreContext())
+        {
+            var message = db.OutMessages.FirstOrDefault(i => i.Id == savedId);
+
+            Assert.NotNull(message);
+            Assert.Equal(PModeId, message.PModeId);
+            Assert.Equal(PModeContent, message.PMode);
         }
     }
 }

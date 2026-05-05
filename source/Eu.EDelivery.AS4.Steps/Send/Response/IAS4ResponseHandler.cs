@@ -1,17 +1,17 @@
-﻿using System.Threading.Tasks;
+﻿using Eu.EDelivery.AS4.Http.Response;
 
-namespace Eu.EDelivery.AS4.Steps.Send.Response
+namespace Eu.EDelivery.AS4.Steps.Send.Response;
+
+/// <summary>
+/// Contract for a chain of handlers that handle the <see cref="AS4Response" />.
+/// </summary>
+public interface IAS4ResponseHandler
 {
     /// <summary>
-    /// Contract for a chain of handlers that handle the <see cref="AS4Response" />.
+    /// Handle the given <paramref name="response" />, but delegate to the next handler if you can't.
     /// </summary>
-    internal interface IAS4ResponseHandler
-    {
-        /// <summary>
-        /// Handle the given <paramref name="response" />, but delegate to the next handler if you can't.
-        /// </summary>
-        /// <param name="response"></param>
-        /// <returns></returns>
-        Task<StepResult> HandleResponse(IAS4Response response);
-    }
+    /// <param name="response"></param>
+    /// <returns></returns>
+    /// <param name="cancellation"></param>
+    Task<StepResult> HandleResponseAsync(IAS4Response response, CancellationToken cancellation);
 }

@@ -1,99 +1,68 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+﻿using System.Text;
 using Eu.EDelivery.AS4.Model.Common;
 using Eu.EDelivery.AS4.Model.Core;
 using Eu.EDelivery.AS4.Serialization;
 
-namespace Eu.EDelivery.AS4.Model.Deliver
+namespace Eu.EDelivery.AS4.Model.Deliver;
+
+public class DeliverMessageEnvelope
 {
-    public class DeliverMessageEnvelope
+    private byte[] _alreadySerializedDeliverMessage;
+
+    public string ContentType { get; }
+
+    public IEnumerable<Attachment> Attachments { get; }
+
+    public DeliverMessage Message { get; }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DeliverMessageEnvelope"/> class.
+    /// </summary>
+    public DeliverMessageEnvelope(
+        DeliverMessage message,
+        string contentType,
+        IEnumerable<Attachment> attachments)
     {
-        private byte[] _alreadySerializedDeliverMessage;
+        _alreadySerializedDeliverMessage = [];
 
-        public string ContentType { get; }
+        Message = message;
+        ContentType = contentType;
+        Attachments = attachments;
+    }
 
-        public IEnumerable<Attachment> Attachments { get; }
+    internal DeliverMessageEnvelope(
+        MessageInfo messageInfo,
+        byte[] deliverMessage,
+        string contentType) : this(new DeliverMessage { MessageInfo = messageInfo }, deliverMessage, contentType, Enumerable.Empty<Attachment>()) { }
 
-        public DeliverMessage Message { get; }
+    internal DeliverMessageEnvelope(
+        DeliverMessage message,
+        byte[] deliverMessage,
+        string contentType,
+        IEnumerable<Attachment> attachments)
+    {
+        ArgumentNullException.ThrowIfNull(message);
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="DeliverMessageEnvelope"/> class.
-        /// </summary>
-        public DeliverMessageEnvelope(
-            DeliverMessage message,
-            string contentType,
-            IEnumerable<Attachment> attachments)
+        ArgumentNullException.ThrowIfNull(deliverMessage);
+
+        ArgumentNullException.ThrowIfNull(contentType);
+
+        ArgumentNullException.ThrowIfNull(attachments);
+
+        _alreadySerializedDeliverMessage = deliverMessage;
+
+        Message = message;
+        ContentType = contentType;
+        Attachments = attachments;
+    }
+
+    public byte[] SerializeMessage()
+    {
+        if (_alreadySerializedDeliverMessage.Length == 0)
         {
-            if (message == null)
-            {
-                throw new ArgumentNullException(nameof(message));
-            }
-
-            if (contentType == null)
-            {
-                throw new ArgumentNullException(nameof(contentType));
-            }
-
-            if (attachments == null)
-            {
-                throw new ArgumentNullException(nameof(attachments));
-            }
-
-            _alreadySerializedDeliverMessage = new byte[0];
-
-            Message = message;
-            ContentType = contentType;
-            Attachments = attachments;
+            _alreadySerializedDeliverMessage = Encoding.UTF8.GetBytes(AS4XmlSerializer.ToString(Message));
         }
 
-        internal DeliverMessageEnvelope(
-            MessageInfo messageInfo, 
-            byte[] deliverMessage, 
-            string contentType) : this(new DeliverMessage { MessageInfo = messageInfo }, deliverMessage, contentType, Enumerable.Empty<Attachment>()) { }
-
-        internal DeliverMessageEnvelope(
-            DeliverMessage message, 
-            byte[] deliverMessage, 
-            string contentType, 
-            IEnumerable<Attachment> attachments)
-        {
-            if (message == null)
-            {
-                throw new ArgumentNullException(nameof(message));
-            }
-
-            if (deliverMessage == null)
-            {
-                throw new ArgumentNullException(nameof(deliverMessage));
-            }
-
-            if (contentType == null)
-            {
-                throw new ArgumentNullException(nameof(contentType));
-            }
-
-            if (attachments == null)
-            {
-                throw new ArgumentNullException(nameof(attachments));
-            }
-
-            _alreadySerializedDeliverMessage = deliverMessage;
-
-            Message = message;
-            ContentType = contentType;
-            Attachments = attachments;
-        }
-
-        public byte[] SerializeMessage()
-        {
-            if (_alreadySerializedDeliverMessage.Length == 0)
-            {
-                _alreadySerializedDeliverMessage = Encoding.UTF8.GetBytes(AS4XmlSerializer.ToString(Message));
-            }
-
-            return _alreadySerializedDeliverMessage;
-        }
+        return _alreadySerializedDeliverMessage;
     }
 }

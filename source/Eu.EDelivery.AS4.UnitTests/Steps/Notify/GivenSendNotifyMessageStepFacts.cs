@@ -1,6 +1,4 @@
-﻿using System;
-using System.Threading.Tasks;
-using Eu.EDelivery.AS4.Entities;
+﻿using Eu.EDelivery.AS4.Entities;
 using Eu.EDelivery.AS4.Model.Internal;
 using Eu.EDelivery.AS4.Model.Notify;
 using Eu.EDelivery.AS4.Model.PMode;
@@ -11,176 +9,181 @@ using Eu.EDelivery.AS4.UnitTests.Common;
 using Eu.EDelivery.AS4.UnitTests.Repositories;
 using Eu.EDelivery.AS4.UnitTests.Strategies.Method;
 using Eu.EDelivery.AS4.UnitTests.Strategies.Sender;
+using Microsoft.Extensions.Logging;
 using Moq;
-using Xunit;
+using NSubstitute;
 
-namespace Eu.EDelivery.AS4.UnitTests.Steps.Notify
+namespace Eu.EDelivery.AS4.UnitTests.Steps.Notify;
+
+/// <summary>
+/// Testing <see cref="SendNotifyMessageStep" />
+/// </summary>
+public class GivenSendNotifyMessageStepFacts : GivenDatastoreFacts
 {
-    /// <summary>
-    /// Testing <see cref="SendNotifyMessageStep" />
-    /// </summary>
-    public class GivenSendNotifyMessageStepFacts : GivenDatastoreFacts
+    [Theory]
+    [ClassData(typeof(NotifyRetryData))]
+    public async Task UpdatesToBeRetriedWhenSendingResultsInRetryableFail<T>(
+        NotifyRetry retry,
+        NotifyType<T> type) where T : Entity
     {
-        [Theory]    
-        [ClassData(typeof(NotifyRetryData))]
-        public async Task Updates_ToBeRetried_When_Sending_Results_In_RetryableFail<T>(
-            NotifyRetry retry,
-            NotifyType<T> type) where T : Entity
+        // Arrange
+        var sut = CreateSendNotifyStepWithSender(StubSenderWithResult(retry.SendResult));
+
+        var ebmsMessageId = Guid.NewGuid().ToString();
+        var entity = type.Insertion(GetDataStoreContext)(ebmsMessageId, retry.CurrentRetryCount, retry.MaxRetryCount);
+
+        // Act
+        await sut.ExecuteAsync(CreateNotifyMessage<T>(ebmsMessageId, entity), CancellationToken.None);
+
+        // Assert
+        type.Assertion(GetDataStoreContext)(
+            ebmsMessageId,
+            e =>
+            {
+                Assert.NotNull(e);
+                (var _, var actualOperation) = type.OperationGetter(GetDataStoreContext, e);
+                Assert.Equal(retry.ExpectedOperation, actualOperation);
+            });
+    }
+
+    private static INotifySender StubSenderWithResult(SendResult r)
+    {
+        var stub = new Mock<INotifySender>();
+        stub.Setup(s => s.SendAsync(It.IsAny<NotifyMessageEnvelope>(), CancellationToken.None))
+            .ReturnsAsync(r);
+
+        return stub.Object;
+    }
+
+    private static MessagingContext CreateNotifyMessage<T>(string ebmsMessageId, Entity entity)
+    {
+        var envelope = new NotifyMessageEnvelope(
+            new MessageInfo
+            {
+                MessageId = ebmsMessageId,
+                RefToMessageId = ebmsMessageId
+            },
+            Status.Delivered,
+            [],
+            "content-type",
+            typeof(T));
+
+        var ctx = new MessagingContext(
+            new ReceivedEntityMessage(entity),
+            MessagingContextMode.Notify)
         {
-            // Arrange
-            IStep sut = CreateSendNotifyStepWithSender(StubSenderWithResult(retry.SendResult));
-
-            string ebmsMessageId = Guid.NewGuid().ToString();
-            T entity = type.Insertion(GetDataStoreContext)(ebmsMessageId, retry.CurrentRetryCount, retry.MaxRetryCount);
-
-            // Act
-            await sut.ExecuteAsync(CreateNotifyMessage<T>(ebmsMessageId, entity));
-
-            // Assert
-            type.Assertion(GetDataStoreContext)(
-                ebmsMessageId,
-                e =>
+            SendingPMode = new SendingProcessingMode
+            {
+                ReceiptHandling =
                 {
-                    (int _, Operation actualOperation) = type.OperationGetter(GetDataStoreContext, e);
-                    Assert.Equal(retry.ExpectedOperation, actualOperation);
-                });
-        }
-
-        private static INotifySender StubSenderWithResult(SendResult r)
-        {
-            var stub = new Mock<INotifySender>();
-            stub.Setup(s => s.SendAsync(It.IsAny<NotifyMessageEnvelope>()))
-                .ReturnsAsync(r);
-
-            return stub.Object;
-        }
-
-        private static MessagingContext CreateNotifyMessage<T>(string ebmsMessageId, Entity entity)
-        {
-            var envelope = new NotifyMessageEnvelope(
-                new MessageInfo
-                {
-                    MessageId = ebmsMessageId,
-                    RefToMessageId = ebmsMessageId
+                    NotifyMethod = new Method { Type = "FILE" }
                 },
-                Status.Delivered,
-                new byte[0], 
-                "content-type",
-                typeof(T));
-
-            var ctx = new MessagingContext(
-                new ReceivedEntityMessage(entity), 
-                MessagingContextMode.Notify)
-            {
-                SendingPMode = new SendingProcessingMode
+                ErrorHandling =
                 {
-                    ReceiptHandling =
-                    {
-                        NotifyMethod = new Method { Type = "FILE" }
-                    },
-                    ErrorHandling =
-                    {
-                        NotifyMethod = new Method { Type = "FILE" }
-                    },
-                    ExceptionHandling =
-                    {
-                        NotifyMethod = new Method { Type = "FILE" }
-                    }
-                }
-            };
-
-            ctx.ModifyContext(envelope);
-            return ctx;
-        }
-
-        [Fact]
-        public async Task ThenExecuteStepFailsWithConnectionFailureAsync()
-        {
-            // Arrange
-            IStep sut = CreateSendNotifyStepWithSender(new SaboteurSender());
-
-            var fixture = new MessagingContext(
-                EmptyNotifyMessageEnvelope(Status.Delivered));
-
-            // Act / Assert
-            await Assert.ThrowsAnyAsync<Exception>(
-                    () => sut.ExecuteAsync(fixture));
-        }
-
-        [Fact]
-        public async Task ThenExecuteStepSucceedsWithSendingPModeAsync()
-        {
-            // Arrange
-            var entity = new InMessage($"receipt-{Guid.NewGuid()}");
-            entity.InitializeIdFromDatabase(1);
-
-            var fixture = new MessagingContext(
-                EmptyNotifyMessageEnvelope(Status.Delivered),
-                new ReceivedEntityMessage(entity))
-            {
-                SendingPMode = new SendingProcessingMode
+                    NotifyMethod = new Method { Type = "FILE" }
+                },
+                ExceptionHandling =
                 {
-                    ReceiptHandling = { NotifyMethod = new LocationMethod("not-empty-location") }
+                    NotifyMethod = new Method { Type = "FILE" }
                 }
-            };
+            }
+        };
 
-            GetDataStoreContext.InsertInMessage(new InMessage($"entity-{Guid.NewGuid()}"));
+        ctx.ModifyContext(envelope);
+        return ctx;
+    }
 
-            var spySender = new SpySender();
-            IStep sut = CreateSendNotifyStepWithSender(spySender);
+    [Fact]
+    public async Task ThenExecuteStepFailsWithConnectionFailureAsync()
+    {
+        // Arrange
+        var sut = CreateSendNotifyStepWithSender(new SaboteurSender());
 
-            // Act
-            await sut.ExecuteAsync(fixture);
+        var fixture = new MessagingContext(
+            EmptyNotifyMessageEnvelope(Status.Delivered));
 
-            // Assert
-            Assert.True(spySender.IsNotified);
-        }
+        // Act / Assert
+        await Assert.ThrowsAnyAsync<Exception>(
+                () => sut.ExecuteAsync(fixture, CancellationToken.None));
+    }
 
-        [Fact]
-        public async Task ThenExecuteStepWithReceivingPModeAsync()
+    [Fact]
+    public async Task ThenExecuteStepSucceedsWithSendingPModeAsync()
+    {
+        // Arrange
+        var entity = new InMessage($"receipt-{Guid.NewGuid()}");
+        entity.InitializeIdFromDatabase(1);
+
+        var fixture = new MessagingContext(
+            EmptyNotifyMessageEnvelope(Status.Delivered),
+            new ReceivedEntityMessage(entity))
         {
-            // Arrange
-            var entity = new InMessage($"error-{Guid.NewGuid()}");
-            entity.InitializeIdFromDatabase(1);
-
-            var fixture = new MessagingContext(
-                EmptyNotifyMessageEnvelope(Status.Error),
-                new ReceivedEntityMessage(entity))
+            SendingPMode = new SendingProcessingMode
             {
-                SendingPMode = new SendingProcessingMode
-                {
-                    ErrorHandling = { NotifyMethod = new LocationMethod("not-empty-location") }
-                }
-            };
+                ReceiptHandling = { NotifyMethod = new LocationMethod("not-empty-location") }
+            }
+        };
 
-            GetDataStoreContext.InsertInMessage(new InMessage($"entity-{Guid.NewGuid()}"));
+        GetDataStoreContext.InsertInMessage(new InMessage($"entity-{Guid.NewGuid()}"));
 
-            var spySender = new SpySender();
-            IStep sut = CreateSendNotifyStepWithSender(spySender);
+        var spySender = new SpySender();
+        var sut = CreateSendNotifyStepWithSender(spySender);
 
-            // Act
-            await sut.ExecuteAsync(fixture);
+        // Act
+        await sut.ExecuteAsync(fixture, CancellationToken.None);
 
-            // Assert
-            Assert.True(spySender.IsNotified);
-        }
+        // Assert
+        Assert.True(spySender.IsNotified);
+    }
 
-        private IStep CreateSendNotifyStepWithSender(INotifySender sender)
+    [Fact]
+    public async Task ThenExecuteStepWithReceivingPModeAsync()
+    {
+        // Arrange
+        var entity = new InMessage($"error-{Guid.NewGuid()}");
+        entity.InitializeIdFromDatabase(1);
+
+        var fixture = new MessagingContext(
+            EmptyNotifyMessageEnvelope(Status.Error),
+            new ReceivedEntityMessage(entity))
         {
-            var stubProvider = new Mock<INotifySenderProvider>();
-            stubProvider.Setup(p => p.GetNotifySender(It.IsAny<string>())).Returns(sender);
+            SendingPMode = new SendingProcessingMode
+            {
+                ErrorHandling = { NotifyMethod = new LocationMethod("not-empty-location") }
+            }
+        };
 
-            return new SendNotifyMessageStep(stubProvider.Object, GetDataStoreContext);
-        }
+        GetDataStoreContext.InsertInMessage(new InMessage($"entity-{Guid.NewGuid()}"));
 
-        private static NotifyMessageEnvelope EmptyNotifyMessageEnvelope(Status status)
-        {
-            return new NotifyMessageEnvelope(
-                messageInfo: new MessageInfo { MessageId = "not-empty-message-id" },
-                statusCode: status,
-                notifyMessage: null,
-                contentType: string.Empty,
-                entityType: typeof(InMessage));
-        }
+        var spySender = new SpySender();
+        var sut = CreateSendNotifyStepWithSender(spySender);
+
+        // Act
+        await sut.ExecuteAsync(fixture, CancellationToken.None);
+
+        // Assert
+        Assert.True(spySender.IsNotified);
+    }
+
+    private IStep CreateSendNotifyStepWithSender(INotifySender sender)
+    {
+        var stubProvider = new Mock<INotifySenderProvider>();
+        stubProvider.Setup(p => p.GetNotifySender(It.IsAny<Method>())).Returns(sender);
+
+        return new SendNotifyMessageStep(
+            Substitute.For<ILogger<SendNotifyMessageStep>>(),
+            stubProvider.Object,
+            Default.NewDatastoreRepository(this),
+            Default.NewMarkForRetryService(this));
+    }
+
+    private static NotifyMessageEnvelope EmptyNotifyMessageEnvelope(Status status)
+    {
+        return new NotifyMessageEnvelope(
+            messageInfo: new MessageInfo { MessageId = "not-empty-message-id" },
+            statusCode: status,
+            notifyMessage: [],
+            contentType: string.Empty,
+            entityType: typeof(InMessage));
     }
 }

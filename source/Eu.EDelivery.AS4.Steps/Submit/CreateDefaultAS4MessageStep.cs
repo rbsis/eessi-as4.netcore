@@ -1,98 +1,81 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Linq;
-using System.Threading.Tasks;
+﻿using System.ComponentModel;
 using Eu.EDelivery.AS4.Common;
 using Eu.EDelivery.AS4.Extensions;
 using Eu.EDelivery.AS4.Mappings.PMode;
 using Eu.EDelivery.AS4.Model.Core;
 using Eu.EDelivery.AS4.Model.Internal;
-using Eu.EDelivery.AS4.Model.PMode;
-using log4net;
+using Microsoft.Extensions.Logging;
 
-namespace Eu.EDelivery.AS4.Steps.Submit
+namespace Eu.EDelivery.AS4.Steps.Submit;
+
+/// <summary>
+/// <see cref="IStep" /> implementation
+/// to create a default configured <see cref="AS4Message" />
+/// </summary>
+[NotConfigurable]
+public class CreateDefaultAS4MessageStep : IConfigStep
 {
+    private readonly ILogger<CreateDefaultAS4MessageStep> _logger;
+    private readonly IConfig _config;
+    private readonly ISendingPModeMap _sendingPModeMap;
+
+    private IDictionary<string, string> _properties;
+
+    [Info("Default pmode", type: "pmode")]
+    [Description("The default pmode to be used to create a message.")]
+    private string DefaultPmode => _properties.ReadOptionalProperty("default-pmode");
+
     /// <summary>
-    /// <see cref="IStep" /> implementation
-    /// to create a default configured <see cref="AS4Message" />
+    /// Initializes a new instance of the <see cref="CreateDefaultAS4MessageStep" /> class.
     /// </summary>
-    [NotConfigurable]
-    public class CreateDefaultAS4MessageStep : IConfigStep
+    /// <param name="logger"></param>
+    /// <param name="config">The configuration.</param>
+    /// <param name="sendingPModeMap"></param>
+    public CreateDefaultAS4MessageStep(ILogger<CreateDefaultAS4MessageStep> logger, IConfig config, ISendingPModeMap sendingPModeMap)
     {
-        private static readonly ILog Logger = LogManager.GetLogger( System.Reflection.MethodBase.GetCurrentMethod().DeclaringType );
-        private readonly IConfig _config;
+        _config = config;
+        _logger = logger;
+        _sendingPModeMap = sendingPModeMap;
+        _properties = new Dictionary<string, string>();
+    }
 
-        private IDictionary<string, string> _properties;
+    /// <summary>
+    /// Configure the step with a given Property Dictionary
+    /// </summary>
+    /// <param name="properties"></param>
+    public void Configure(IDictionary<string, string> properties)
+    {
+        _properties = properties;
+    }
 
-        [Info("Default pmode", type: "pmode")]
-        [Description("The default pmode to be used to create a message.")]
-        private string DefaultPmode => _properties?.ReadOptionalProperty("default-pmode");
+    /// <summary>
+    /// Start creating a <see cref="AS4Message" />
+    /// </summary>
+    /// <param name="messagingContext"></param>
+    /// <returns></returns>
+    /// <param name="cancellation"></param>
+    public async Task<StepResult> ExecuteAsync(MessagingContext messagingContext, CancellationToken cancellation)
+    {
+        ArgumentNullException.ThrowIfNull(messagingContext);
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="CreateDefaultAS4MessageStep" /> class.
-        /// </summary>
-        public CreateDefaultAS4MessageStep() : this(Config.Instance) {}
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="CreateDefaultAS4MessageStep" /> class.
-        /// </summary>
-        /// <param name="config">The configuration.</param>
-        public CreateDefaultAS4MessageStep(IConfig config)
+        if (messagingContext.AS4Message == null)
         {
-            if (config == null)
-            {
-                throw new ArgumentNullException(nameof(config));
-            }
-
-            _config = config;
+            throw new ArgumentException($"{nameof(CreateDefaultAS4MessageStep)} requires an AS4Message to assign the default UserMessage to but no AS4Message is present in the MessagingContext");
         }
 
-        /// <summary>
-        /// Configure the step with a given Property Dictionary
-        /// </summary>
-        /// <param name="properties"></param>
-        public void Configure(IDictionary<string, string> properties)
-        {
-            if (properties == null)
-            {
-                throw new ArgumentNullException(nameof(properties));
-            }
+        var pmode = _config.GetSendingPMode(DefaultPmode)
+            ?? throw new InvalidOperationException($"SendingPMode {DefaultPmode} was not found");
 
-            _properties = properties;
-        }
+        var parts = messagingContext.AS4Message.Attachments.Select(PartInfo.CreateFor);
 
-        /// <summary>
-        /// Start creating a <see cref="AS4Message" />
-        /// </summary>
-        /// <param name="messagingContext"></param>
-        /// <returns></returns>
-        public async Task<StepResult> ExecuteAsync(MessagingContext messagingContext)
-        {
-            if (messagingContext == null)
-            {
-                throw new ArgumentNullException(nameof(messagingContext));
-            }
+        var userMessage = _sendingPModeMap.CreateUserMessage(pmode, [.. parts]);
 
-            if (messagingContext.AS4Message == null)
-            {
-                throw new InvalidOperationException(
-                    $"{nameof(CreateDefaultAS4MessageStep)} requires an AS4Message to assign the default UserMessage to but no AS4Message is present in the MessagingContext");
-            }
+        messagingContext.AS4Message.AddMessageUnit(userMessage);
+        messagingContext.SendingPMode = pmode;
 
-            SendingProcessingMode pmode = _config.GetSendingPMode(DefaultPmode);
-
-            IEnumerable<PartInfo> parts =
-                messagingContext.AS4Message.Attachments.Select(PartInfo.CreateFor);
-
-            UserMessage userMessage = 
-                SendingPModeMap.CreateUserMessage(pmode, parts.ToArray());
-
-            messagingContext.AS4Message.AddMessageUnit(userMessage);
-            messagingContext.SendingPMode = pmode;
-
-            Logger.Info($"{Config.Encode(messagingContext.LogTag)} Default AS4Message is created using SendingPMode {Config.Encode(pmode.Id)}");
-            return await StepResult.SuccessAsync(messagingContext);
-        }
+        _logger.LogInformation("{LogTag} Default AS4Message is created using SendingPMode {PModeId}",
+            messagingContext.LogTag,
+            pmode.Id);
+        return await StepResult.SuccessAsync(messagingContext);
     }
 }
