@@ -3,6 +3,7 @@
 ## Introduction
 
 <span>AS4.NET Core</span> is an open-source application that implements the OASIS AS4 specification. It supports both the e-SENS e-Delivery and the EESSI AS4 Messaging profile as an ebMS endpoint.  
+
 Since version v3.0.0, <span>AS4.NET</span> can also act as an intermediary MSH (i-MSH) with message forwarding support and MEP bridging.
 
 The component has been conformance tested against the e-SENS eDelivery specifications.  
@@ -13,6 +14,68 @@ Testing against the EESSI AS4 Messaging Profile has also been conducted.
 ## Documentation
 
 A configuration- and usermanual can be found [online](https://ec.europa.eu/cefdigital/wiki/display/EDELCOMMUNITY/AS4.NET).
+
+## Project Summary
+
+This is an Enterprise eDelivery AS4 (Applicability Statement 4) messaging system for .NET Core, a standards-based B2B/EDI message exchange platform following OASIS specifications. It handles secure, reliable asynchronous electronic messaging between organizations.
+
+### Core Components
+
+1. Agent-Based Message Processing Pipeline
+
+    - Background service agents (Submit, Receive, Deliver, Notify, PullSend, PushSend, Forward) continuously process messages
+    - Each agent follows: Receiver → Transformer → StepExecutioner → ExceptionHandler → JournalLogger
+    - Decoupled, scalable architecture for handling different message flows
+
+2. Message Entities
+
+    - InMessage/OutMessage: Core entities representing incoming/outgoing AS4 messages with lifecycle tracking
+    - Properties: EBMS IDs, routing (From/To parties), service/action, processing mode, message status, SOAP envelope
+    - Base entity class handles ID, insertion/modification timestamps
+
+3. AS4 Message Model
+
+    - Structured objects: UserMessage (business data), SignalMessage (receipts/errors), Attachment (payloads)
+    - Metadata: CollaborationInfo (service/action), SecurityHeader (encryption/signing), Party identifiers
+    - Support for message properties and multi-hop messaging
+
+4. Processing Modes (PMode)
+
+    - XML configuration objects controlling how messages are secured, routed, and processed
+    - SendingProcessingMode & ReceivingProcessingMode stored as serialized XML in message entities
+
+5. Step-Based Execution Engine
+
+    - Pipeline pattern: Steps are individual processing units composed into chains
+    - Features: CompositeStep (grouped steps), ConditionalStep (branching), StepResult tracking
+
+6. Comprehensive Services
+
+    - Message services (CRUD, status updates)
+    - Exception handling and retry logic
+    - Certificate management
+    - Receipt/error piggybacking (bundling)
+    - File storage for message bodies
+
+7. Database Layer
+
+    - Entity Framework Core 8.0 with multi-database support (SQL Server, SQLite, In-Memory)
+    - 6+ migrations for schema evolution
+    - Repositories abstract data access
+
+8. HTTP & Resilience
+
+    - Polly-based retry policies for reliable HTTP delivery
+    - Support for dynamic service discovery (SMP configuration)
+
+9. Standards Compliance
+
+    - OASIS EbMS 3.0 XML namespaces and structure
+    - SOAP 1.1/1.2 envelopes
+    - RSA-SHA256 digital signatures
+    - Multi-hop messaging support
+
+Key Design Patterns: Dependency Injection (Microsoft.Extensions), Repository Pattern, Pipeline/Step Pattern, Background Service Pattern, Configuration Management with dynamic PMode watchers.
 
 ## Features
 

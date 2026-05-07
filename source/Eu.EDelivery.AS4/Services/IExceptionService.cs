@@ -3,6 +3,7 @@ using Eu.EDelivery.AS4.Model.PMode;
 using Eu.EDelivery.AS4.Model.Submit;
 
 namespace Eu.EDelivery.AS4.Services;
+
 internal interface IExceptionService
 {
     Task<InException> InsertIncomingAS4MessageExceptionAsync(Exception exception, string? ebmsMessageId, ReceivingProcessingMode? pmode, CancellationToken cancellation);

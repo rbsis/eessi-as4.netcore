@@ -2,6 +2,7 @@
 using Eu.EDelivery.AS4.Model.PMode;
 
 namespace Eu.EDelivery.AS4.Mappings.PMode;
+
 public interface ISendingPModeMap
 {
     UserMessage CreateUserMessage(SendingProcessingMode sendingPMode, params PartInfo[] parts);
