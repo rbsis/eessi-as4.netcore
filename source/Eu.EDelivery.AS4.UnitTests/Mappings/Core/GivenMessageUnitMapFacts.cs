@@ -1,6 +1,5 @@
 ﻿using Eu.EDelivery.AS4.Mappings.Core;
 using Eu.EDelivery.AS4.Model.Core;
-using FsCheck;
 
 namespace Eu.EDelivery.AS4.UnitTests.Mappings.Core;
 

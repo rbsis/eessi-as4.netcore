@@ -9,23 +9,23 @@ namespace Eu.EDelivery.AS4.PayloadService.UnitTests.Persistance;
 /// <summary>
 /// Testing <see cref="FilePayloadPersister"/>
 /// </summary>
-[DeletePayloads]
+[DeletePayloads("GivenFilePayloadPersisterFacts")]
 public class GivenFilePayloadPersisterFacts
 {
+    private readonly IPayloadPersister _persister = new FilePayloadPersister(
+        NullLogger<FilePayloadPersister>.Instance,
+        new CurrentDirectoryHostEnvironment { ContentRootPath = Path.Combine(Directory.GetCurrentDirectory(), "GivenFilePayloadPersisterFacts") });
+
     [Fact]
-    [DeletePayloads]
     public async Task WritesFileWithMetaToDisk()
     {
         // Arrange
         const string ExpectedContent = "message data!";
         using var serializeContent = ExpectedContent.AsStream();
-        var persister = new FilePayloadPersister(
-            NullLogger<FilePayloadPersister>.Instance,
-            new CurrentDirectoryHostEnvironment());
 
         // Act
         var payload = new Payload(serializeContent, CreateUniquePayloadMeta());
-        var newPayloadId = await persister.SavePayload(payload);
+        var newPayloadId = await _persister.SavePayload(payload);
 
         // Assert
         Assert.Equal(ExpectedContent, DeserializeContent(newPayloadId));
@@ -33,20 +33,16 @@ public class GivenFilePayloadPersisterFacts
     }
 
     [Fact]
-    [DeletePayloads]
     public async Task LoadsPayloadWithMetaFromDisk()
     {
         // Arrange
         const string ExpectedContent = "message data!";
         using var serializeContent = ExpectedContent.AsStream();
-        var persister = new FilePayloadPersister(
-            NullLogger<FilePayloadPersister>.Instance,
-            new CurrentDirectoryHostEnvironment());
 
         // Act
         var payload = new Payload(serializeContent, CreateUniquePayloadMeta());
-        var savedPayloadId = await persister.SavePayload(payload);
-        using var actualPayload = await persister.LoadPayload(savedPayloadId);
+        var savedPayloadId = await _persister.SavePayload(payload);
+        using var actualPayload = await _persister.LoadPayload(savedPayloadId);
 
         // Assert
         Assert.Equal(ExpectedContent, actualPayload.DeserializeContent());
@@ -59,6 +55,6 @@ public class GivenFilePayloadPersisterFacts
 
     private static string DeserializeContent(string id)
     {
-        return File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Payloads", id));
+        return File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "GivenFilePayloadPersisterFacts", "Payloads", id));
     }
 }

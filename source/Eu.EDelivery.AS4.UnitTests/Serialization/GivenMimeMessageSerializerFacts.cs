@@ -1,8 +1,6 @@
 ﻿using System.Text;
 using Eu.EDelivery.AS4.Model.Core;
 using Eu.EDelivery.AS4.Serialization;
-using FsCheck;
-using FsCheck.Xunit;
 using Microsoft.Extensions.Logging.Abstractions;
 using MimeKit;
 using static Eu.EDelivery.AS4.UnitTests.Properties.Resources;

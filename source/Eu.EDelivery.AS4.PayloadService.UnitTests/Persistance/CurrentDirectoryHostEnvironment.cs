@@ -34,11 +34,7 @@ public class CurrentDirectoryHostEnvironment : IWebHostEnvironment
     /// <summary>
     /// Gets or sets the absolute path to the directory that contains the application content files.
     /// </summary>
-    public string ContentRootPath
-    {
-        get => Directory.GetCurrentDirectory();
-        set { }
-    }
+    public string ContentRootPath { get; set; } = Directory.GetCurrentDirectory();
 
     /// <summary>
     /// Gets or sets an <see cref="T:Microsoft.Extensions.FileProviders.IFileProvider" /> pointing at <see cref="P:Microsoft.AspNetCore.Hosting.IHostingEnvironment.ContentRootPath" />.

@@ -1,5 +1,4 @@
-﻿using Eu.EDelivery.AS4.Common;
-using Eu.EDelivery.AS4.Model.Internal;
+﻿using Eu.EDelivery.AS4.Model.Internal;
 using Eu.EDelivery.AS4.Model.PMode;
 using Eu.EDelivery.AS4.Serialization;
 using Eu.EDelivery.AS4.Watchers;
@@ -24,13 +23,13 @@ public class GivenConfigFacts
 
     private static void TestConfigInitialization(
         Action<Settings> alterSettings,
-        Action<Config> onInitialized)
+        Action<AS4.Common.Config> onInitialized)
     {
         var testSettingsFileName = Path.Combine(
-            Config.ApplicationPath, "config", "test-settings.xml");
+            AS4.Common.Config.ApplicationPath, "config", "test-settings.xml");
 
         var originalSettingsFileName = Path.Combine(
-            Config.ApplicationPath, "config", "settings.xml");
+            AS4.Common.Config.ApplicationPath, "config", "settings.xml");
 
         var settings = AS4XmlSerializer
             .FromString<Settings>(File.ReadAllText(originalSettingsFileName));
@@ -46,11 +45,11 @@ public class GivenConfigFacts
             testSettingsFileName,
             overwrite: true);
 
-        Directory.CreateDirectory(Path.Combine(Config.ApplicationPath, "config", "send-pmodes"));
-        Directory.CreateDirectory(Path.Combine(Config.ApplicationPath, "config", "receive-pmodes"));
+        Directory.CreateDirectory(Path.Combine(AS4.Common.Config.ApplicationPath, "config", "send-pmodes"));
+        Directory.CreateDirectory(Path.Combine(AS4.Common.Config.ApplicationPath, "config", "receive-pmodes"));
 
-        var sut = new Config(
-            NullLogger<Config>.Instance,
+        var sut = new AS4.Common.Config(
+            NullLogger<AS4.Common.Config>.Instance,
             Substitute.For<IPModeWatcher<ReceivingProcessingMode>>(),
             Substitute.For<IPModeWatcher<SendingProcessingMode>>());
 

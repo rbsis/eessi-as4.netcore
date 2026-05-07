@@ -1,6 +1,4 @@
 ﻿using Eu.EDelivery.AS4.Model.Core;
-using FsCheck;
-using FsCheck.Xunit;
 
 namespace Eu.EDelivery.AS4.UnitTests.Model;
 
@@ -13,10 +11,11 @@ public class GivenPartyFacts
     public Property EqualsParties(NonEmptyString roleA, NonEmptyString roleB)
     {
         return Prop.ForAll(
-            Gen.OneOf(
-                   Arb.From<NonEmptyString>().Generator.Select(x => Tuple.Create(x, x)))
-               .Three()
-               .ToArbitrary(),
+            Gen.OneOf(ArbMap.Default
+                .GeneratorFor<NonEmptyString>()
+                .Select(x => Tuple.Create(x, x)))
+            .Three()
+            .ToArbitrary(),
             xs =>
             {
                 (var idA, var idB) = xs.Item2;

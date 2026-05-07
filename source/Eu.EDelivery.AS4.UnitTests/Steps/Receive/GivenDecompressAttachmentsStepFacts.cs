@@ -5,8 +5,6 @@ using Eu.EDelivery.AS4.Model.Core;
 using Eu.EDelivery.AS4.Model.Internal;
 using Eu.EDelivery.AS4.Steps;
 using Eu.EDelivery.AS4.Steps.Receive;
-using FsCheck;
-using FsCheck.Xunit;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using PartInfo = Eu.EDelivery.AS4.Model.Core.PartInfo;

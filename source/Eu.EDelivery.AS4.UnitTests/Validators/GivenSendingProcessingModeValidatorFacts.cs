@@ -4,8 +4,6 @@ using Eu.EDelivery.AS4.Serialization;
 using Eu.EDelivery.AS4.UnitTests.Model.PMode;
 using Eu.EDelivery.AS4.Validators;
 using FluentValidation.Results;
-using FsCheck;
-using FsCheck.Xunit;
 using static Eu.EDelivery.AS4.UnitTests.Validators.ValidationInputGenerators;
 using static Eu.EDelivery.AS4.UnitTests.Validators.ValidationOutputAssertions;
 
@@ -354,8 +352,8 @@ public class GivenSendingProcessingModeValidatorFacts
     {
         return Prop.ForAll(
             Gen.Frequency(
-                Tuple.Create(1, Arb.From<string>().Generator),
-                Tuple.Create(2, Gen.Constant(retryInterval.ToString())))
+                (1, ArbMap.Default.GeneratorFor<string>()),
+                (2, Gen.Constant(retryInterval.ToString())))
                .ToArbitrary(),
             retryIntervalText =>
             {
@@ -398,8 +396,8 @@ public class GivenSendingProcessingModeValidatorFacts
     {
         return Prop.ForAll(
             Gen.Frequency(
-                Tuple.Create(1, Arb.Generate<string>()),
-                Tuple.Create(2, Gen.Constant(retryInterval.ToString())))
+                (1, ArbMap.Default.GeneratorFor<string>()),
+                (2, Gen.Constant(retryInterval.ToString())))
                .ToArbitrary(),
             retryIntervalText =>
             {

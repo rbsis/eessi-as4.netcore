@@ -5,8 +5,6 @@ using Eu.EDelivery.AS4.Model.Notify;
 using Eu.EDelivery.AS4.Strategies.Sender;
 using Eu.EDelivery.AS4.TestUtils.Stubs;
 using Eu.EDelivery.AS4.UnitTests.Strategies.Method;
-using FsCheck;
-using FsCheck.Xunit;
 using Microsoft.Extensions.Logging.Abstractions;
 using MessageInfo = Eu.EDelivery.AS4.Model.Common.MessageInfo;
 

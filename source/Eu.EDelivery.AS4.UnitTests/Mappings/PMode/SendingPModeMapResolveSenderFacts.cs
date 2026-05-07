@@ -1,7 +1,5 @@
 ﻿using Eu.EDelivery.AS4.Mappings.PMode;
 using Eu.EDelivery.AS4.Model.PMode;
-using FsCheck;
-using FsCheck.Xunit;
 using CoreParty = Eu.EDelivery.AS4.Model.Core.Party;
 
 namespace Eu.EDelivery.AS4.UnitTests.Mappings.PMode;

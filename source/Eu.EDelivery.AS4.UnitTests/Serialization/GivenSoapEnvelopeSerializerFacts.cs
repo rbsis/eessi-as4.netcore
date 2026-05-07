@@ -16,8 +16,6 @@ using Eu.EDelivery.AS4.UnitTests.Extensions;
 using Eu.EDelivery.AS4.UnitTests.Model;
 using Eu.EDelivery.AS4.UnitTests.Resources;
 using Eu.EDelivery.AS4.Xml;
-using FsCheck;
-using FsCheck.Xunit;
 using Microsoft.Extensions.Logging.Abstractions;
 using static Eu.EDelivery.AS4.UnitTests.Properties.Resources;
 using AgreementReference = Eu.EDelivery.AS4.Model.Core.AgreementReference;

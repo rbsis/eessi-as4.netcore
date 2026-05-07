@@ -1,5 +1,4 @@
 ﻿using Eu.EDelivery.AS4.Model.PMode;
-using FsCheck;
 
 namespace Eu.EDelivery.AS4.UnitTests.Validators;
 
@@ -31,23 +30,23 @@ public static class ValidationInputGenerators
 
     public static Gen<Method> CreateMethodGen()
     {
-        var parameterGen =
-            Arb.Generate<string>()
-               .Two()
-               .SelectMany(t => Gen.OneOf(
-                   Gen.Constant(new Parameter { Name = t.Item1, Value = t.Item2 })));
+        var parameterGen = ArbMap.Default
+            .GeneratorFor<string>()
+            .Two()
+            .SelectMany(t => Gen.OneOf(
+                Gen.Constant(new Parameter { Name = t.Item1, Value = t.Item2 })));
 
-        var parametersGen =
-            Arb.Generate<string>()
-               .Two()
-               .ListOf()
-               .SelectMany(xs => Gen.OneOf(
-                   //Gen.Constant((IList<Parameter>)null),
-                   parameterGen.ListOf()));
+        var parametersGen = ArbMap.Default
+            .GeneratorFor<string>()
+            .Two()
+            .ListOf()
+            .SelectMany(xs => Gen.OneOf(
+                //Gen.Constant((IList<Parameter>)null),
+                parameterGen.ListOf()));
 
-        return Gen.OneOf(
-            Arb.Generate<string>()
-               .SelectMany(s => parametersGen.Select(
-                   p => new Method { Type = s, Parameters = p?.ToList() })));
+        return Gen.OneOf(ArbMap.Default
+            .GeneratorFor<string>()
+            .SelectMany(s => parametersGen.Select(
+                p => new Method { Type = s, Parameters = p?.ToList() })));
     }
 }

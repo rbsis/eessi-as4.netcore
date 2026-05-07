@@ -4,7 +4,6 @@ using Eu.EDelivery.AS4.TestUtils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NSubstitute;
-using Xunit.Abstractions;
 
 namespace Eu.EDelivery.AS4.UnitTests.Receivers;
 

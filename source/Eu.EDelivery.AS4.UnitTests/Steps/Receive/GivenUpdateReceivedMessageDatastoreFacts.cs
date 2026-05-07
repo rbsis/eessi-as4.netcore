@@ -8,8 +8,6 @@ using Eu.EDelivery.AS4.Steps.Receive;
 using Eu.EDelivery.AS4.UnitTests.Common;
 using Eu.EDelivery.AS4.UnitTests.Model;
 using Eu.EDelivery.AS4.UnitTests.Repositories;
-using FsCheck;
-using FsCheck.Xunit;
 using Microsoft.Extensions.Logging.Abstractions;
 using AgreementReference = Eu.EDelivery.AS4.Model.Core.AgreementReference;
 using CollaborationInfo = Eu.EDelivery.AS4.Model.Core.CollaborationInfo;
@@ -113,7 +111,7 @@ public class GivenUpdateReceivedMessageDatastoreFacts : GivenDatastoreFacts
             });
     }
 
-    private static Arbitrary<IList<MessageUnit>> CreateUserReceiptArb()
+    private static Arbitrary<List<MessageUnit>> CreateUserReceiptArb()
     {
         return Gen.OneOf(
             Gen.Fresh<MessageUnit>(

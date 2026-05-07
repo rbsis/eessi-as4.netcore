@@ -6,8 +6,6 @@ using Eu.EDelivery.AS4.Steps;
 using Eu.EDelivery.AS4.Steps.Receive;
 using Eu.EDelivery.AS4.UnitTests.Common;
 using Eu.EDelivery.AS4.UnitTests.Repositories;
-using FsCheck;
-using FsCheck.Xunit;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using MessageExchangePattern = Eu.EDelivery.AS4.Entities.MessageExchangePattern;
@@ -76,7 +74,7 @@ public class GivenSaveReceivedMessageDatastoreFacts : GivenDatastoreStepFacts
             });
     }
 
-    private static Gen<IList<MessageUnit>> GenMessageUnits()
+    private static Gen<List<MessageUnit>> GenMessageUnits()
     {
         return Gen.OneOf(
             Gen.Fresh<MessageUnit>(() => new Receipt($"receipt-{Guid.NewGuid()}", $"user-{Guid.NewGuid()}")),

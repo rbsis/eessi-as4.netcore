@@ -17,7 +17,7 @@ public class GivenWebPayloadRetrieverFacts
         // Act
         using var streamReader = new StreamReader(await retriever.RetrievePayloadAsync(Location, CancellationToken.None));
         // Assert
-        var actualPayload = await streamReader.ReadToEndAsync();
+        var actualPayload = await streamReader.ReadToEndAsync(TestContext.Current.CancellationToken);
         Assert.Equal(ExpectedPayload, actualPayload);
     }
 

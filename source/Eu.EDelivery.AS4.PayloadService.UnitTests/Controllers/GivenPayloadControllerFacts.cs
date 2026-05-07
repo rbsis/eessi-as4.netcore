@@ -11,12 +11,12 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Eu.EDelivery.AS4.PayloadService.UnitTests.Controllers;
 
-[DeletePayloads]
+[DeletePayloads("GivenPayloadControllerFacts")]
 public class GivenPayloadControllerFacts
 {
-    private static readonly IPayloadPersister _payloadPersister = new FilePayloadPersister(
-            NullLogger<FilePayloadPersister>.Instance,
-            new CurrentDirectoryHostEnvironment());
+    private readonly IPayloadPersister _payloadPersister = new FilePayloadPersister(
+        NullLogger<FilePayloadPersister>.Instance,
+        new CurrentDirectoryHostEnvironment { ContentRootPath = Path.Combine(Directory.GetCurrentDirectory(), "GivenPayloadControllerFacts") });
 
     private const string ExpectedContent = "message data!";
     private const string ExpectedHost = "localhost:4000";
@@ -25,13 +25,12 @@ public class GivenPayloadControllerFacts
 
     private static string ExpectedRequestUri => $"{ExpectedScheme}://{ExpectedHost}{ExpectedPath}";
 
-    private static PayloadController AnonymousPayloadController => new(_payloadPersister)
+    private PayloadController AnonymousPayloadController => new(_payloadPersister)
     {
         ControllerContext = { HttpContext = new DefaultHttpContext() }
     };
 
     [Fact]
-    [DeletePayloads]
     public async Task DownloadPayloadResultInNotFound_IfPayloadDoesntExists()
     {
         // Act
@@ -42,7 +41,6 @@ public class GivenPayloadControllerFacts
     }
 
     [Fact]
-    [DeletePayloads]
     public async Task UploadPayloadResultInBadRequest_IfContentTypeIsntMultipart()
     {
         // Act
@@ -53,7 +51,6 @@ public class GivenPayloadControllerFacts
     }
 
     [Fact]
-    [DeletePayloads]
     public async Task DownloadsTheUploadedFileFromController()
     {
         // Arrange

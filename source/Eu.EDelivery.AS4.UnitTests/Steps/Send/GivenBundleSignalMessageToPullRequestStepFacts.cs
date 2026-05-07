@@ -9,8 +9,6 @@ using Eu.EDelivery.AS4.Steps;
 using Eu.EDelivery.AS4.Steps.Send;
 using Eu.EDelivery.AS4.UnitTests.Common;
 using Eu.EDelivery.AS4.UnitTests.Repositories;
-using FsCheck;
-using FsCheck.Xunit;
 using Microsoft.Extensions.Logging.Abstractions;
 using static Eu.EDelivery.AS4.UnitTests.Properties.Resources;
 
@@ -83,8 +81,8 @@ public class GivenBundleSignalMessageToPullRequestStepFacts : GivenDatastoreFact
     {
         var genOperation =
             Gen.Frequency(
-                Tuple.Create(4, Gen.Constant(Operation.ToBePiggyBacked)),
-                Tuple.Create(1, Arb.Generate<Operation>()));
+                (4, Gen.Constant(Operation.ToBePiggyBacked)),
+                (1, ArbMap.Default.GeneratorFor<Operation>()));
 
         return Prop.ForAll(
             genOperation.ToArbitrary(),
@@ -130,11 +128,11 @@ public class GivenBundleSignalMessageToPullRequestStepFacts : GivenDatastoreFact
             });
     }
 
-    private static Gen<Tuple<string, string>> EqualAndDiffer(Func<string> constant)
+    private static Gen<(string, string)> EqualAndDiffer(Func<string> constant)
     {
         return Gen.OneOf(
             Gen.Fresh(constant).Two(),
-            Gen.Fresh(constant).Select(mpc => Tuple.Create(mpc, mpc)));
+            Gen.Fresh(constant).Select(mpc => (mpc, mpc)));
     }
 
     private static bool IsPullRequestBundledWithOneReceipt(StepResult result)

@@ -6,8 +6,6 @@ using Eu.EDelivery.AS4.Model.PMode;
 using Eu.EDelivery.AS4.Model.Submit;
 using Eu.EDelivery.AS4.Serialization;
 using Eu.EDelivery.AS4.UnitTests.Common;
-using FsCheck;
-using FsCheck.Xunit;
 using AgreementReference = Eu.EDelivery.AS4.Model.Core.AgreementReference;
 using CollaborationInfo = Eu.EDelivery.AS4.Model.PMode.CollaborationInfo;
 using Party = Eu.EDelivery.AS4.Model.PMode.Party;
@@ -177,16 +175,16 @@ public class GivenSubmitMessageMapFacts
 
     public enum Mapped { Submit, PMode, Default }
 
-    public static IEnumerable<object?[]> SubmitMappingFixtures =
-    [
-        [false, null, null, Mapped.Default],
-        [true, null, null, Mapped.Default],
-        [false, null, Guid.NewGuid().ToString(), Mapped.PMode],
-        [true, null, Guid.NewGuid().ToString(), Mapped.PMode],
-        [false, Guid.NewGuid().ToString(), null, Mapped.Submit],
-        [true, Guid.NewGuid().ToString(), null, Mapped.Submit],
-        [true, Guid.NewGuid().ToString(), Guid.NewGuid().ToString(), Mapped.Submit]
-    ];
+    public static TheoryData<bool, string?, string?, Mapped> SubmitMappingFixtures => new()
+    {
+        { false, null, null, Mapped.Default },
+        { true, null, null, Mapped.Default },
+        { false, null, "e22ca07a-9716-4b93-8d4d-8e614cc77044", Mapped.PMode },
+        { true, null, "e92910d6-3bb3-4b20-9888-26bdacfbc137", Mapped.PMode },
+        { false, "6c4a730a-1c6f-44e5-99be-2f646199745f", null, Mapped.Submit },
+        { true, "45da2ce7-63aa-49a5-906b-53d6d3a07b50", null, Mapped.Submit },
+        { true, "8b8b4a38-5b08-4318-8dcd-eeac992e90fa", "d6fa3654-e5a5-4f5e-8982-e3be44292d62", Mapped.Submit }
+    };
 
     [Theory]
     [MemberData(nameof(SubmitMappingFixtures))]
@@ -484,12 +482,12 @@ public class GivenSubmitMessageMapFacts
     public void ResolvesMpcFromEitherSubmitOrSendingPMode(
         bool allowOverride,
         string? submitMpc,
-        string pmodeMpc,
+        string? pmodeMpc,
         Mapped expected)
     {
         // Arrange
         var submit = new SubmitMessage { MessageInfo = { Mpc = submitMpc } };
-        var sendingPMode = new SendingProcessingMode
+        var sendingPMode = pmodeMpc == null ? null : new SendingProcessingMode
         {
             AllowOverride = allowOverride,
             MessagePackaging = { Mpc = pmodeMpc }

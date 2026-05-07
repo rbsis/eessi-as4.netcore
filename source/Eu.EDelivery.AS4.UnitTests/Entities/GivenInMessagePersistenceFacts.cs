@@ -20,7 +20,7 @@ public class GivenInMessagePersistenceFacts : GivenDatastoreFacts
 
             db.InMessages.Add(inMessage);
 
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
             savedInMessageId = inMessage.Id;
 
@@ -50,7 +50,7 @@ public class GivenInMessagePersistenceFacts : GivenDatastoreFacts
 
             db.InMessages.Add(inMessage);
 
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
             savedInMessageId = inMessage.Id;
 
@@ -78,7 +78,7 @@ public class GivenInMessagePersistenceFacts : GivenDatastoreFacts
 
             db.InMessages.Add(inMessage);
 
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
             savedInMessageId = inMessage.Id;
 
@@ -108,7 +108,7 @@ public class GivenInMessagePersistenceFacts : GivenDatastoreFacts
 
             db.InMessages.Add(inMessage);
 
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
             savedInMessageId = inMessage.Id;
 
@@ -139,7 +139,7 @@ public class GivenInMessagePersistenceFacts : GivenDatastoreFacts
 
             db.InMessages.Add(message);
 
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
             savedId = message.Id;
         }

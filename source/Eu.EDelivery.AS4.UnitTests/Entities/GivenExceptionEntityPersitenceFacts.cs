@@ -17,7 +17,7 @@ public class GivenExceptionEntityPersitenceFacts : GivenDatastoreFacts
 
             db.InExceptions.Add(inException);
 
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
             savedId = inException.Id;
 
@@ -48,7 +48,7 @@ public class GivenExceptionEntityPersitenceFacts : GivenDatastoreFacts
 
             db.OutExceptions.Add(outException);
 
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
             savedId = outException.Id;
 
@@ -80,7 +80,7 @@ public class GivenExceptionEntityPersitenceFacts : GivenDatastoreFacts
 
             db.InExceptions.Add(inException);
 
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
             savedId = inException.Id;
 

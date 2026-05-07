@@ -8,8 +8,6 @@ using Eu.EDelivery.AS4.Services.DynamicDiscovery;
 using Eu.EDelivery.AS4.Steps;
 using Eu.EDelivery.AS4.Steps.Submit;
 using Eu.EDelivery.AS4.UnitTests.Extensions;
-using FsCheck;
-using FsCheck.Xunit;
 using Microsoft.Extensions.Logging.Abstractions;
 using AS4Party = Eu.EDelivery.AS4.Model.Core.Party;
 using AS4PartyId = Eu.EDelivery.AS4.Model.Core.PartyId;
@@ -26,7 +24,7 @@ public class GivenDynamicDiscoveryStepFacts
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Blocker Code Smell", "S2699:Tests should include assertions", Justification = "<Pending>")]
     public Property ResolveOnlyToPartyFromAS4MessageIfUserMessage(
         MessagingContextMode contextMode,
-        Maybe<SignalMessage> signalM)
+        SignalMessage signalMessage)
     {
         return Prop.ForAll(
             GenAS4Party().ToArbitrary(),
@@ -37,9 +35,11 @@ public class GivenDynamicDiscoveryStepFacts
                     AS4Party.DefaultFrom,
                     receiver);
 
-                var message =
-                    signalM.Select(s => AS4Message.Create([s, user]))
-                           .GetOrElse(AS4Message.Create(user));
+                var maybeSignal = Maybe<SignalMessage>.Just(signalMessage);
+
+                var message = maybeSignal
+                    .Select(s => AS4Message.Create([s, user]))
+                    .GetOrElse(AS4Message.Create(user));
 
                 var context = new MessagingContext(message, contextMode)
                 {
@@ -63,18 +63,18 @@ public class GivenDynamicDiscoveryStepFacts
                                       && context.AS4Message!.IsUserMessage);
                 });
 
-                return Prop.Throws<InvalidOperationException, bool>(act)
-                           .Label($"Throws {nameof(InvalidOperationException)}")
-                           .Or(() => act.Value)
-                           .Label("Resolved ToParty is UserMessge.ToParty");
+                return FsCheck.FSharp.Prop.Throws<InvalidOperationException, bool>(act)
+                    .Label($"Throws {nameof(InvalidOperationException)}")
+                    .Or(() => act.Value)
+                    .Label("Resolved ToParty is UserMessge.ToParty");
             });
     }
 
-    private static Gen<AS4Party> GenAS4Party() => Arb.Generate<NonEmptyString>()
+    private static Gen<AS4Party> GenAS4Party() => ArbMap.Default.GeneratorFor<NonEmptyString>()
         .Two()
         .Select(t => new AS4PartyId(t.Item1.Get, t.Item2.Get))
         .NonEmptyListOf()
-        .Zip(Arb.Generate<NonEmptyString>(), (ids, role) => new AS4Party(role.Get, ids));
+        .Zip(ArbMap.Default.GeneratorFor<NonEmptyString>(), (ids, role) => new AS4Party(role.Get, ids));
 
     [Property(MaxTest = 1000)]
     public Property ResolveEitherSubmitOrSendingPModeToParty(bool allowOverride)
@@ -120,19 +120,19 @@ public class GivenDynamicDiscoveryStepFacts
             });
     }
 
-    private static Gen<SubmitParty> GenSubmitParty() => Arb.Generate<string>()
+    private static Gen<SubmitParty> GenSubmitParty() => ArbMap.Default.GeneratorFor<string>()
         .Two()
         .Select(t => new SubmitPartyId(t.Item1, t.Item2))
         .ArrayOf()
         .OrNull()
-        .Zip(Arb.Generate<string>(), (ids, role) => new SubmitParty { Role = role, PartyIds = ids });
+        .Zip(ArbMap.Default.GeneratorFor<string>(), (ids, role) => new SubmitParty { Role = role, PartyIds = ids });
 
-    private static Gen<PModeParty> GenPModeParty() => Arb.Generate<string>()
+    private static Gen<PModeParty> GenPModeParty() => ArbMap.Default.GeneratorFor<string>()
         .Two()
         .Select(t => new PModePartyId { Id = t.Item1, Type = t.Item2 })
         .ListOf()
         .OrNull()
-        .Zip(Arb.Generate<string>(), (ids, role) => new PModeParty { Role = role, PartyIds = ids?.ToList() });
+        .Zip(ArbMap.Default.GeneratorFor<string>(), (ids, role) => new PModeParty { Role = role, PartyIds = ids?.ToList() });
 
     private static (bool, AS4Party?) ExerciseDynamicDiscovery(
         SubmitParty submitParty,

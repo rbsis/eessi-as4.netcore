@@ -59,7 +59,7 @@ public class SaboteurMessageBodyStoreFacts
     [Fact]
     public async Task FailsToLoad()
     {
-        await Assert.ThrowsAnyAsync<Exception>(() => new SaboteurMessageBodyStore().LoadMessageBodyAsync(null, default));
+        await Assert.ThrowsAnyAsync<Exception>(() => new SaboteurMessageBodyStore().LoadMessageBodyAsync(null, TestContext.Current.CancellationToken));
     }
 
     [Fact]

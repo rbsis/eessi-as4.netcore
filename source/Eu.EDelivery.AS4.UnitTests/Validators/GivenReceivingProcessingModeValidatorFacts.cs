@@ -3,8 +3,6 @@ using Eu.EDelivery.AS4.Extensions;
 using Eu.EDelivery.AS4.Model.PMode;
 using Eu.EDelivery.AS4.Validators;
 using FluentValidation.Results;
-using FsCheck;
-using FsCheck.Xunit;
 using static Eu.EDelivery.AS4.UnitTests.Validators.ValidationInputGenerators;
 using static Eu.EDelivery.AS4.UnitTests.Validators.ValidationOutputAssertions;
 
@@ -21,12 +19,12 @@ public class GivenReceivingProcessingModeValidatorFacts
     [Property]
     public Property ResponseConfigurationShouldBeSpecifiedWhenReplyPatternIsCallback(ReplyPattern pattern)
     {
-        return Prop.ForAll(
-            Arb.Generate<string>()
-               .Select(url => new Protocol { Url = url })
-               .Select(p => (PushConfiguration?)new PushConfiguration { Protocol = p })
-               .OrNull()
-               .ToArbitrary(),
+        return Prop.ForAll(ArbMap.Default
+            .GeneratorFor<string>()
+            .Select(url => new Protocol { Url = url })
+            .Select(p => (PushConfiguration?)new PushConfiguration { Protocol = p })
+            .OrNull()
+            .ToArbitrary(),
             responseConfig =>
             {
                 // Arrange
@@ -110,7 +108,7 @@ public class GivenReceivingProcessingModeValidatorFacts
                     Certificate = certificate.Get,
                     Password = password.Get
                 }),
-                Arb.Generate<object>())
+                ArbMap.Default.GeneratorFor<object>())
                .ToArbitrary(),
             (hashFunction, signingAlgorithm, certificateInformation) =>
             {
@@ -331,8 +329,8 @@ public class GivenReceivingProcessingModeValidatorFacts
     {
         return Prop.ForAll(
             Gen.Frequency(
-                   Tuple.Create(2, Gen.Constant(retryInterval.ToString())),
-                   Tuple.Create(1, Arb.From<string>().Generator))
+                   (2, Gen.Constant(retryInterval.ToString())),
+                   (1, ArbMap.Default.GeneratorFor<string>()))
                .ToArbitrary(),
             retryIntervalText =>
             {

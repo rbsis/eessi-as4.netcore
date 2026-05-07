@@ -167,7 +167,7 @@ public class GivenMessageEntityFacts
 
                 db.InMessages.Add(inMessage);
 
-                await db.SaveChangesAsync();
+                await db.SaveChangesAsync(TestContext.Current.CancellationToken);
             }
 
             using (var db = GetDataStoreContext())
@@ -191,7 +191,7 @@ public class GivenMessageEntityFacts
 
                 db.InMessages.Add(inMessage);
 
-                await db.SaveChangesAsync();
+                await db.SaveChangesAsync(TestContext.Current.CancellationToken);
             }
 
             using (var db = GetDataStoreContext())
