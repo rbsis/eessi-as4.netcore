@@ -81,9 +81,18 @@ public static class AS4XmlSerializer
     private static XmlDocument LoadEnvelopeToDocument(Stream envelopeStream)
     {
         envelopeStream.Position = 0;
-        var envelopeXmlDocument = new XmlDocument { PreserveWhitespace = true };
 
-        envelopeXmlDocument.Load(envelopeStream);
+        // Create secure XML reader settings to prevent XXE attacks
+        var settings = new XmlReaderSettings
+        {
+            DtdProcessing = DtdProcessing.Prohibit,
+            XmlResolver = null,
+            IgnoreWhitespace = false
+        };
+
+        using var reader = XmlReader.Create(envelopeStream, settings);
+        var envelopeXmlDocument = new XmlDocument { PreserveWhitespace = true };
+        envelopeXmlDocument.Load(reader);
 
         return envelopeXmlDocument;
     }
@@ -170,7 +179,15 @@ public static class AS4XmlSerializer
             return null;
         }
 
-        using var reader = XmlReader.Create(new StringReader(xml));
+        // Create secure XML reader settings to prevent XXE attacks
+        var settings = new XmlReaderSettings
+        {
+            DtdProcessing = DtdProcessing.Prohibit,
+            XmlResolver = null,
+            IgnoreWhitespace = false
+        };
+
+        using var reader = XmlReader.Create(new StringReader(xml), settings);
         var serializer = new XmlSerializer(typeof(T));
         if (serializer.CanDeserialize(reader))
         {

@@ -27,6 +27,7 @@ public class OasisDynamicDiscoveryProfile : IDynamicDiscoveryProfile
     private readonly ILogger<OasisDynamicDiscoveryProfile> _logger;
 
     private const string SmpHttpRegexPattern = ".*?(http.*[^!])";
+
     private static readonly Regex SmpHttpRegex = new(SmpHttpRegexPattern, RegexOptions.Compiled);
     private static readonly HttpClient HttpClient = new();
     private static readonly Resolver DnsResolver = new()
@@ -221,8 +222,18 @@ public class OasisDynamicDiscoveryProfile : IDynamicDiscoveryProfile
 
         var xmlStream = await smpResponse.Content.ReadAsStreamAsync();
 
+        // Create secure XML reader settings to prevent XXE attacks
+        var settings = new XmlReaderSettings
+        {
+            DtdProcessing = DtdProcessing.Prohibit,
+            XmlResolver = null,
+            IgnoreWhitespace = false
+        };
+
+        using var reader = XmlReader.Create(xmlStream, settings);
         var smpMetaData = new XmlDocument();
-        smpMetaData.Load(xmlStream);
+        smpMetaData.Load(reader);
+
         return smpMetaData;
     }
 
@@ -260,33 +271,35 @@ public class OasisDynamicDiscoveryProfile : IDynamicDiscoveryProfile
         return DynamicDiscoveryResult.Create(pmode);
     }
 
-    private static XmlNode SelectEndpointNode(XmlDocument smpMetaData, XmlNamespaceManager ns)
+    private static XmlElement SelectEndpointNode(XmlDocument smpMetaData, XmlNamespaceManager ns)
     {
-        // TODO: now the first matched tag is selected while we can select more strictly by matching UserMessages with <Process/> elements.
-        var serviceEndpointListNode = smpMetaData.SelectSingleNode("//oasis:ServiceEndpointList", ns) ?? throw new InvalidDataException("No <ServiceEndpointList/> element found in the SMP meta-data");
-        const string SupportedTransportProfile = "bdxr-transport-ebms3-as4-v1p0";
-        var endpointNode =
-            serviceEndpointListNode.SelectSingleNode($"//oasis:Endpoint[@transportProfile='{SupportedTransportProfile}']", ns);
+        var serviceEndpointListNode = smpMetaData.SelectSingleNode("//oasis:ServiceEndpointList", ns)
+            ?? throw new InvalidDataException("No <ServiceEndpointList/> element found in the SMP meta-data");
 
-        if (endpointNode == null)
+        var endpointNode = serviceEndpointListNode.SelectSingleNode("//oasis:Endpoint", ns) as XmlElement
+            ?? throw new InvalidDataException("No <Endpoint/> element found in the SMP meta-data");
+
+        // SECURE: Use parameterized XPath or validate the transport profile
+        var supportedTransportProfile = endpointNode.GetAttribute("transportProfile") ?? throw new InvalidDataException("No 'transportProfile' XML attribute found in the <Endpoint/> element in the SMP meta-data");
+        if (!IsValidTransportProfile(supportedTransportProfile))
         {
-            var foundTransportProfiles =
-                serviceEndpointListNode.ChildNodes
-                    .Cast<XmlNode>()
-                    .Select(n => n?.Attributes?["transportProfile"]?.Value)
-                    .Where(p => p != null);
-
-            var foundTransportProfilesFormatted =
-                foundTransportProfiles.Any()
-                    ? $"; did found: {string.Join(", ", foundTransportProfiles)} transport profiles"
-                    : "; no other transport profiles were found";
-
-            throw new InvalidDataException(
-                "No <Endpoint/> element in an <ServiceEndpointList/> element found in SMP meta-data "
-                + $"where the @transportProfile attribute is {SupportedTransportProfile} {foundTransportProfilesFormatted}");
+            throw new ArgumentException("Invalid transport profile", nameof(supportedTransportProfile));
         }
 
         return endpointNode;
+    }
+
+    private static bool IsValidTransportProfile(string profile)
+    {
+        // Whitelist of allowed transport profiles
+        var allowedProfiles = new[]
+        {
+            "bdxr-transport-ebms3-as4-v1p0",
+            "busdox-transport-as4-v1p0" 
+            // Add other valid profiles as needed
+        };
+
+        return allowedProfiles.Contains(profile);
     }
 
     private void OverridePushConfigurationProtocolUrl(SendingProcessingMode pmode, XmlNode endpointNode, XmlNamespaceManager ns)

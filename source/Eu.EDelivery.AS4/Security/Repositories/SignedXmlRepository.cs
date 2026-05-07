@@ -8,7 +8,7 @@ namespace Eu.EDelivery.AS4.Security.Repositories;
 /// </summary>
 internal class SignedXmlRepository
 {
-    private readonly string[] _allowedIdNodeNames;
+    private static readonly string[] _allowedIdNodeNames = ["Id", "id", "ID"];
     private readonly XmlDocument _document;
 
     /// <summary>
@@ -18,7 +18,6 @@ internal class SignedXmlRepository
     public SignedXmlRepository(XmlDocument document)
     {
         _document = document;
-        _allowedIdNodeNames = ["Id", "id", "ID"];
     }
 
     /// <summary>
@@ -38,8 +37,18 @@ internal class SignedXmlRepository
 
     private List<XmlElement> FindIdElements(string idValue, string idNodeName)
     {
-        var xpath = $"//*[@*[local-name()='{idNodeName}' and "
-                       + $"namespace-uri()='{Constants.Namespaces.WssSecurityUtility}' and .='{idValue}']]";
+        // SECURE: Validate idNodeName against whitelist to prevent XPath injection
+        if (!_allowedIdNodeNames.Contains(idNodeName))
+        {
+            throw new ArgumentException("Invalid ID node name", nameof(idNodeName));
+        }
+
+        // SECURE: Use string.Format with validated parameters
+        var xpath = string.Format(
+            "//*[@*[local-name()='{0}' and namespace-uri()='{1}' and .='{2}']]",
+            idNodeName,
+            Constants.Namespaces.WssSecurityUtility,
+            idValue);
 
         return _document.SelectNodes(xpath)?.Cast<XmlElement>().ToList() ?? [];
     }

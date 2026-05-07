@@ -1,10 +1,11 @@
 ﻿using System.Net;
 using System.Security.Cryptography.X509Certificates;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 
 namespace Eu.EDelivery.AS4.Http;
 
-public class HttpClientBase
+public partial class HttpClientBase
 {
     protected ILogger<HttpClientBase> Logger { get; }
 
@@ -17,10 +18,40 @@ public class HttpClientBase
     {
         try
         {
-            var handler = new HttpClientHandler();
+            var handler = new HttpClientHandler
+            {
+                // Enforce TLS 1.2 or higher
+                SslProtocols = System.Security.Authentication.SslProtocols.Tls12 | System.Security.Authentication.SslProtocols.Tls13,
+
+                // Enable certificate revocation checking
+                CheckCertificateRevocationList = true,
+
+                // Explicit server certificate validation
+                ServerCertificateCustomValidationCallback = (message, cert, chain, errors) =>
+                {
+                    // Perform custom validation if needed
+                    // For now, use default validation but ensure revocation checking
+                    if (errors != System.Net.Security.SslPolicyErrors.None)
+                    {
+                        Logger.LogWarning("SSL certificate validation failed for {Url}: {Errors}", url, errors);
+                        return false;
+                    }
+                    return true;
+                }
+            };
+
             if (clientCert != null)
             {
-                handler.ClientCertificates.Add(clientCert);
+                // Use X509Certificate2 for better security
+                if (clientCert is X509Certificate2 cert2)
+                {
+                    handler.ClientCertificates.Add(cert2);
+                }
+                else
+                {
+                    // Convert to X509Certificate2 if possible
+                    handler.ClientCertificates.Add(new X509Certificate2(clientCert));
+                }
             }
 
             using var client = new HttpClient(handler);
@@ -56,8 +87,40 @@ public class HttpClientBase
             return;
         }
 
-        Logger.LogError("Unexpected response received for http notification: {ResponseStatusCode}, {ResponseString}",
+        // Sanitize sensitive data from response before logging
+        var sanitizedResponse = SanitizeResponseForLogging(responseString);
+
+        Logger.LogError("Unexpected response received for http notification: {ResponseStatusCode}, Response: {SanitizedResponse}",
             response.StatusCode,
-            responseString);
+            sanitizedResponse);
     }
+
+    private static string SanitizeResponseForLogging(string responseContent)
+    {
+        if (string.IsNullOrEmpty(responseContent))
+            return responseContent;
+
+        // Limit response length to prevent log flooding
+        const int MaxLength = 500;
+        var truncated = responseContent.Length > MaxLength
+            ? responseContent[..MaxLength] + "...[truncated]"
+            : responseContent;
+
+        // Remove or mask potential sensitive data patterns
+        // Add more patterns as needed based on your data
+        truncated = PasswordRegex().Replace(truncated, "<password>***</password>");
+        truncated = TokenRegex().Replace(truncated, "<token>***</token>");
+        truncated = CertificateRegex().Replace(truncated, "<certificate>***</certificate>");
+
+        return truncated;
+    }
+
+    [GeneratedRegex(@"(?i)<certificate[^>]*>.*?</certificate>", RegexOptions.None, "nl-NL")]
+    private static partial Regex CertificateRegex();
+
+    [GeneratedRegex(@"(?i)<password[^>]*>.*?</password>", RegexOptions.None, "nl-NL")]
+    private static partial Regex PasswordRegex();
+
+    [GeneratedRegex(@"(?i)<token[^>]*>.*?</token>", RegexOptions.None, "nl-NL")]
+    private static partial Regex TokenRegex();
 }
