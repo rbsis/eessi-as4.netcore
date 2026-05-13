@@ -1,0 +1,43 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <CheckEolTargetFramework>true</CheckEolTargetFramework>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- MSBuildTreatWarningsAsErrors is ook nodig anders zie AzureDevOps dit niet als errors -->
+    <MSBuildTreatWarningsAsErrors>true</MSBuildTreatWarningsAsErrors>
+    <!-- S1133 = Deprecated code should be removed -->
+    <!-- S1135 = TODO items, die resulteren niet in errors -->
+    <!-- S6562 = Always set the DateTimeKind when creating a new DateTime object -->
+    <!-- S6580 = Always use DateTime.Parse overloads with an IFormatProvider parameter -->
+    <!-- S2094 = Remove this empty class, write its code or make it an "interface" -->
+    <!-- S6605 = Collection-specific "Exists" method should be used instead of the "Any" extension. -->
+    <!-- S6602 = "Find" method should be used instead of the "FirstOrDefault" extension method. -->
+    <!-- S6603 = The collection-specific "TrueForAll" method should be used instead of the "All" extension -->
+    <!-- S2068 = "password" detected here, make sure this is not a hard-coded credential. -->
+    <!-- S2139 = Either log and handle, or rethrow, this exception. -->
+    <!-- xUnit1044 = Avoid using TheoryData type arguments that are not serializable. -->
+    <NoWarn>CS1591;S125;S1133;S1135;S6562;S6580;S2094;S6605;S6602;S6603;S2068;S2139;xUnit1044</NoWarn>
+    <ResolveAssemblyWarnOrErrorOnTargetArchitectureMismatch>None</ResolveAssemblyWarnOrErrorOnTargetArchitectureMismatch>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <FileVersion>4.0.1.0</FileVersion>
+    <Version>4.0.1.0</Version>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <!-- 1701  = Assuming assembly reference -->
+    <!-- 1702  = Assuming assembly reference -->
+    <!-- S2094 = Classes should not be empty -->
+    <NoWarn>$(NoWarn);1701;1702;S2094</NoWarn>
+  </PropertyGroup>
+
+  <!--<ItemGroup>
+    <Compile Include="$(SolutionDir)\GlobalUsings.Solution.cs" Link="GlobalUsings.Solution.cs" />
+  </ItemGroup>-->
+
+  <!--<ItemGroup Condition="$(AssemblyName.Contains('UnitTest'))&#xD;&#xA;
+                        OR $(AssemblyName.Contains('Specifications'))&#xD;&#xA;">
+    <Compile Include="$(SolutionDir)\GlobalUsings.Tests.cs" Link="GlobalUsings.Tests.cs" />
+  </ItemGroup>-->
+</Project>

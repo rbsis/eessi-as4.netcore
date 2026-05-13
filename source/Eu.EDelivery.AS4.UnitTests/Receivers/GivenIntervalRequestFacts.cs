@@ -1,62 +1,59 @@
-﻿using System;
-using Eu.EDelivery.AS4.Receivers;
-using Xunit;
+﻿using Eu.EDelivery.AS4.Receivers;
 
-namespace Eu.EDelivery.AS4.UnitTests.Receivers
+namespace Eu.EDelivery.AS4.UnitTests.Receivers;
+
+public class GivenIntervalRequestFacts
 {
-    public class GivenIntervalRequestFacts
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void CanCalculateNewInterval(int calculationCount)
     {
-        [Theory]
-        [InlineData(1)]
-        [InlineData(2)]
-        public void CanCalculateNewInterval(int calculationCount)
-        {
-            // Arrange
-            TimeSpan minInterval = TimeSpan.FromSeconds(1);
-            TimeSpan maxInterval = TimeSpan.FromSeconds(5);
-            var sut = new StubInterval(minInterval, maxInterval);
+        // Arrange
+        var minInterval = TimeSpan.FromSeconds(1);
+        var maxInterval = TimeSpan.FromSeconds(5);
+        var sut = new StubInterval(minInterval, maxInterval);
 
-            // Act
-            CalculateNewInterval(calculationCount, sut);
+        // Act
+        CalculateNewInterval(calculationCount, sut);
 
-            // Assert
-            TimeSpan actualInterval = sut.CurrentInterval;
-            TimeSpan expectedInterval = TimeSpan.FromSeconds(Math.Pow(1.75, calculationCount - 1));
-            Assert.Equal(expectedInterval, actualInterval);
-        }
-
-        [Fact]
-        public void ResetInterval()
-        {
-            // Arrange
-            var minInterval = TimeSpan.FromSeconds(1);
-            var sut = new StubInterval(minInterval, TimeSpan.FromSeconds(5));
-
-            CalculateNewInterval(amount: 2, request: sut);
-
-            // Act
-            sut.ResetInterval();
-
-            // Assert
-            Assert.Equal(minInterval, sut.CurrentInterval);
-        }
-
-        private static void CalculateNewInterval(int amount, IntervalRequest request)
-        {
-            if (amount == 0) return;
-
-            request.CalculateNewInterval();
-            CalculateNewInterval(amount - 1, request);
-        }
+        // Assert
+        var actualInterval = sut.CurrentInterval;
+        var expectedInterval = TimeSpan.FromSeconds(Math.Pow(1.75, calculationCount - 1));
+        Assert.Equal(expectedInterval, actualInterval);
     }
 
-    public class StubInterval : IntervalRequest
+    [Fact]
+    public void ResetInterval()
     {
-        /// <summary>
-        /// Initializes a new instance of the <see cref="StubInterval"/> class.
-        /// </summary>
-        /// <param name="minInterval">The min Interval.</param>
-        /// <param name="maxInterval">The max Interval.</param>
-        public StubInterval(TimeSpan minInterval, TimeSpan maxInterval) : base(minInterval, maxInterval) { }
+        // Arrange
+        var minInterval = TimeSpan.FromSeconds(1);
+        var sut = new StubInterval(minInterval, TimeSpan.FromSeconds(5));
+
+        CalculateNewInterval(amount: 2, request: sut);
+
+        // Act
+        sut.ResetInterval();
+
+        // Assert
+        Assert.Equal(minInterval, sut.CurrentInterval);
     }
+
+    private static void CalculateNewInterval(int amount, IntervalRequest request)
+    {
+        if (amount == 0) return;
+
+        request.CalculateNewInterval();
+        CalculateNewInterval(amount - 1, request);
+    }
+}
+
+public class StubInterval : IntervalRequest
+{
+    /// <summary>
+    /// Initializes a new instance of the <see cref="StubInterval"/> class.
+    /// </summary>
+    /// <param name="minInterval">The min Interval.</param>
+    /// <param name="maxInterval">The max Interval.</param>
+    public StubInterval(TimeSpan minInterval, TimeSpan maxInterval) : base(minInterval, maxInterval) { }
 }

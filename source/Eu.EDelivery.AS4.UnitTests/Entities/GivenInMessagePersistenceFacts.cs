@@ -1,155 +1,156 @@
-﻿using System;
-using System.Linq;
-using System.Threading.Tasks;
-using Eu.EDelivery.AS4.Entities;
+﻿using Eu.EDelivery.AS4.Entities;
 using Eu.EDelivery.AS4.Extensions;
 using Eu.EDelivery.AS4.UnitTests.Common;
-using Xunit;
 
-namespace Eu.EDelivery.AS4.UnitTests.Entities
+namespace Eu.EDelivery.AS4.UnitTests.Entities;
+
+public class GivenInMessagePersistenceFacts : GivenDatastoreFacts
 {
-    public class GivenInMessagePersistenceFacts : GivenDatastoreFacts
+    [Fact]
+    public async Task InMessageOperationIsCorrectlyPersisted()
     {
-        [Fact]
-        public async Task InMessageOperationIsCorrectlyPersisted()
+        long savedInMessageId;
+
+        using (var db = this.GetDataStoreContext())
         {
-            long savedInMessageId;
-
-            using (var db = this.GetDataStoreContext())
+            var inMessage = new InMessage(Guid.NewGuid().ToString())
             {
-                var inMessage = new InMessage(Guid.NewGuid().ToString());
-                inMessage.Operation = Operation.Sent;
+                Operation = Operation.Sent
+            };
 
-                db.InMessages.Add(inMessage);
+            db.InMessages.Add(inMessage);
 
-                await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-                savedInMessageId = inMessage.Id;
+            savedInMessageId = inMessage.Id;
 
-                Assert.NotEqual(default(long), savedInMessageId);
-            }
-
-            using (var db = this.GetDataStoreContext())
-            {
-                var inMessage = db.InMessages.FirstOrDefault(i => i.Id == savedInMessageId);
-
-                Assert.NotNull(inMessage);
-                Assert.Equal(Operation.Sent, inMessage.Operation);
-            }
+            Assert.NotEqual(default, savedInMessageId);
         }
 
-        [Fact]
-        public async Task InMessageMEPIsCorrectlyPersisted()
+        using (var db = this.GetDataStoreContext())
         {
-            long savedInMessageId;
+            var inMessage = db.InMessages.FirstOrDefault(i => i.Id == savedInMessageId);
 
-            using (var db = this.GetDataStoreContext())
+            Assert.NotNull(inMessage);
+            Assert.Equal(Operation.Sent, inMessage.Operation);
+        }
+    }
+
+    [Fact]
+    public async Task InMessageMEPIsCorrectlyPersisted()
+    {
+        long savedInMessageId;
+
+        using (var db = this.GetDataStoreContext())
+        {
+            var inMessage = new InMessage(Guid.NewGuid().ToString())
             {
-                var inMessage = new InMessage(Guid.NewGuid().ToString());
-                inMessage.MEP = MessageExchangePattern.Pull;
+                MEP = MessageExchangePattern.Pull
+            };
 
-                db.InMessages.Add(inMessage);
+            db.InMessages.Add(inMessage);
 
-                await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-                savedInMessageId = inMessage.Id;
+            savedInMessageId = inMessage.Id;
 
-                Assert.NotEqual(default(long), savedInMessageId);
-            }
-
-            using (var db = this.GetDataStoreContext())
-            {
-                var inMessage = db.InMessages.FirstOrDefault(i => i.Id == savedInMessageId);
-
-                Assert.NotNull(inMessage);
-                Assert.Equal(MessageExchangePattern.Pull, inMessage.MEP);
-            }
+            Assert.NotEqual(default, savedInMessageId);
         }
 
-        [Fact]
-        public async Task InMessageStatusIsCorrectlyPersisted()
+        using (var db = this.GetDataStoreContext())
         {
-            long savedInMessageId;
+            var inMessage = db.InMessages.FirstOrDefault(i => i.Id == savedInMessageId);
 
-            using (var db = this.GetDataStoreContext())
-            {
-                var inMessage = new InMessage(Guid.NewGuid().ToString());
-                inMessage.SetStatus(InStatus.Notified);
+            Assert.NotNull(inMessage);
+            Assert.Equal(MessageExchangePattern.Pull, inMessage.MEP);
+        }
+    }
 
-                db.InMessages.Add(inMessage);
+    [Fact]
+    public async Task InMessageStatusIsCorrectlyPersisted()
+    {
+        long savedInMessageId;
 
-                await db.SaveChangesAsync();
+        using (var db = this.GetDataStoreContext())
+        {
+            var inMessage = new InMessage(Guid.NewGuid().ToString());
+            inMessage.SetStatus(InStatus.Notified);
 
-                savedInMessageId = inMessage.Id;
+            db.InMessages.Add(inMessage);
 
-                Assert.NotEqual(default(long), savedInMessageId);
-            }
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-            using (var db = this.GetDataStoreContext())
-            {
-                var inMessage = db.InMessages.FirstOrDefault(i => i.Id == savedInMessageId);
+            savedInMessageId = inMessage.Id;
 
-                Assert.NotNull(inMessage);
-                Assert.Equal(InStatus.Notified, inMessage.Status.ToEnum<InStatus>());
-            }
+            Assert.NotEqual(default, savedInMessageId);
         }
 
-        [Fact]
-        public async Task InMessageMessageTypeIsCorrectlyPersisted()
+        using (var db = this.GetDataStoreContext())
         {
-            long savedInMessageId;
+            var inMessage = db.InMessages.FirstOrDefault(i => i.Id == savedInMessageId);
 
-            using (var db = this.GetDataStoreContext())
+            Assert.NotNull(inMessage);
+            Assert.Equal(InStatus.Notified, inMessage.Status.ToEnum<InStatus>());
+        }
+    }
+
+    [Fact]
+    public async Task InMessageMessageTypeIsCorrectlyPersisted()
+    {
+        long savedInMessageId;
+
+        using (var db = this.GetDataStoreContext())
+        {
+            var inMessage = new InMessage(Guid.NewGuid().ToString())
             {
-                var inMessage = new InMessage(Guid.NewGuid().ToString());
-                inMessage.EbmsMessageType = MessageType.Receipt;
+                EbmsMessageType = MessageType.Receipt
+            };
 
-                db.InMessages.Add(inMessage);
+            db.InMessages.Add(inMessage);
 
-                await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-                savedInMessageId = inMessage.Id;
+            savedInMessageId = inMessage.Id;
 
-                Assert.NotEqual(default(long), savedInMessageId);
-            }
-
-            using (var db = this.GetDataStoreContext())
-            {
-                var inMessage = db.InMessages.FirstOrDefault(i => i.Id == savedInMessageId);
-
-                Assert.NotNull(inMessage);
-                Assert.Equal(MessageType.Receipt, inMessage.EbmsMessageType);
-            }
+            Assert.NotEqual(default, savedInMessageId);
         }
 
-        [Fact]
-        public async Task PModeInformationIsCorrectlyPersisted()
+        using (var db = this.GetDataStoreContext())
         {
-            long savedId;
+            var inMessage = db.InMessages.FirstOrDefault(i => i.Id == savedInMessageId);
 
-            const string pmodeId = "pmodeId";
-            const string pmodeContent = "<pmode><id>pmodeId</id></pmode>";
+            Assert.NotNull(inMessage);
+            Assert.Equal(MessageType.Receipt, inMessage.EbmsMessageType);
+        }
+    }
 
-            using (var db = GetDataStoreContext())
-            {
-                var message = new InMessage("some-message-id");
-                message.SetPModeInformation(pmodeId, pmodeContent);
+    [Fact]
+    public async Task PModeInformationIsCorrectlyPersisted()
+    {
+        long savedId;
 
-                db.InMessages.Add(message);
+        const string PModeId = "pmodeId";
+        const string PModeContent = "<pmode><id>pmodeId</id></pmode>";
 
-                await db.SaveChangesAsync();
+        using (var db = GetDataStoreContext())
+        {
+            var message = new InMessage("some-message-id");
+            message.SetPModeInformation(PModeId, PModeContent);
 
-                savedId = message.Id;
-            }
+            db.InMessages.Add(message);
 
-            using (var db = this.GetDataStoreContext())
-            {
-                var message = db.InMessages.FirstOrDefault(i => i.Id == savedId);
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-                Assert.NotNull(message);
-                Assert.Equal(pmodeId, message.PModeId);
-                Assert.Equal(pmodeContent, message.PMode);
-            }
+            savedId = message.Id;
+        }
+
+        using (var db = this.GetDataStoreContext())
+        {
+            var message = db.InMessages.FirstOrDefault(i => i.Id == savedId);
+
+            Assert.NotNull(message);
+            Assert.Equal(PModeId, message.PModeId);
+            Assert.Equal(PModeContent, message.PMode);
         }
     }
 }

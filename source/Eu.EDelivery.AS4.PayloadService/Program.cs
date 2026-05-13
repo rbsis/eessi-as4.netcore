@@ -1,69 +1,43 @@
-﻿using System;
-using System.IO;
-using System.Threading;
-using Eu.EDelivery.AS4.PayloadService.Persistance;
-using Eu.EDelivery.AS4.PayloadService.Services;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
+﻿using Eu.EDelivery.AS4.PayloadService;
+using NLog;
+using NLog.Web;
 
-namespace Eu.EDelivery.AS4.PayloadService
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Configuration
+    .SetBasePath(Directory.GetCurrentDirectory())
+    .AddJsonFile("./bin/appsettings.payloadservice.json", true)
+    .AddJsonFile("./appsettings.payloadservice.json", true)
+    .AddEnvironmentVariables();
+
+builder.Host
+    .UseContentRoot(Directory.GetCurrentDirectory());
+
+//builder.WebHost
+//    .UseUrls("http://localhost:3000")
+
+// NLog: Setup NLog for Dependency injection
+LogManager.Setup().LoadConfiguration(builder =>
 {
-    /// <summary>
-    /// Start for the Payload Service Web API.
-    /// </summary>
-    public class Program
-    {
+    builder.ForLogger().FilterMinLevel(NLog.LogLevel.Debug).WriteToConsole();
+});
 
-        /// <summary>
-        /// Entry method for the Payload Service Web API.
-        /// </summary>
-        /// <param name="args"></param>
-        public static void Main(string[] args)
-        {
-            Start(CancellationToken.None);
-        }
+builder.Logging.ClearProviders();
+builder.Host.UseNLog();
 
-        /// <summary>
-        /// Starts the PayloadService with a cancellation-token
-        /// This method is used when the service is started in process.
-        /// </summary>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        public static void Start(CancellationToken cancellationToken)
-        {
-            var hostBuilder = new WebHostBuilder();
+var startup = new Startup(builder.Configuration);
 
-            var config = new ConfigurationBuilder()
-                .SetBasePath(Directory.GetCurrentDirectory())
-                .AddJsonFile("./bin/appsettings.payloadservice.json", true)
-                .AddJsonFile("./appsettings.payloadservice.json", true)
-                .AddEnvironmentVariables()
-                .Build();
+startup.ConfigureServices(builder.Services);
 
-            var url = config.GetValue<string>("Url") ?? "http://localhost:3000";
+var app = builder.Build();
 
-            var host = hostBuilder
-                    .UseKestrel()
-                    .UseContentRoot(Directory.GetCurrentDirectory())
-                    .UseIISIntegration()
-                    .UseStartup<Startup>()
-                    .UseApplicationInsights();
-
-            int retentionDays = config.GetValue("RetentionPeriod", defaultValue: 90);            
-            host.ConfigureServices(services => 
-                services.AddSingleton(provider => 
-                    new CleanUpService(
-                        provider.GetService<IPayloadPersister>(), 
-                        TimeSpan.FromDays(retentionDays))));
-
-            
-
-            host.UseUrls(url)
-                .Build()
-                .RunAsync(cancellationToken)
-                .Wait();
-
-            Console.WriteLine("Payload Service shutdown");
-        }
-    }
+// Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
+
+app.MapControllers();
+
+await app.RunAsync();

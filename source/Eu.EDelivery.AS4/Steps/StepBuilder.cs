@@ -1,113 +1,98 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Configuration;
-using System.Linq;
-using System.Reflection;
-using Eu.EDelivery.AS4.Builders;
+﻿using System.Data;
 using Eu.EDelivery.AS4.Model.Internal;
+using Microsoft.Extensions.Logging;
 
-namespace Eu.EDelivery.AS4.Steps
+namespace Eu.EDelivery.AS4.Steps;
+
+/// <summary>
+/// Builder to make <see cref="IStep"/> implementation
+/// from <see cref="Step"/> settings
+/// </summary>
+public class StepBuilder : IStepBuilder
 {
-    /// <summary>
-    /// Builder to make <see cref="IStep"/> implementation
-    /// from <see cref="Step"/> settings
-    /// </summary>
-    public class StepBuilder
+    private readonly ILogger<StepBuilder> _logger;
+    private readonly IServiceProvider _serviceProvider;
+
+    public StepBuilder(ILogger<StepBuilder> logger, IServiceProvider serviceProvider)
     {
-        private readonly Step[] _stepConfiguration;
-        private readonly ConditionalStepConfig _conditionalStepConfig;
+        _logger = logger;
+        _serviceProvider = serviceProvider;
+    }
 
-        private StepBuilder(Step[] stepConfiguration, ConditionalStepConfig conditionalStepConfig)
+    /// <summary>
+    /// Build the <see cref="IStep"/> implementation
+    /// </summary>
+    /// <param name="stepConfiguration"></param>
+    /// <returns></returns>
+    public IStep BuildAsSingleStep(Step[] stepConfiguration)
+    {
+        var steps = stepConfiguration.Select(CreateInstance).ToArray();
+        return new CompositeStep(steps);
+
+    }
+    /// <summary>
+    /// Build the <see cref="IStep"/> implementation
+    /// </summary>
+    /// <param name="conditionalStepConfig">The conditional step configuration.</param>
+    /// <returns></returns>
+    public IStep BuildAsSingleStep(ConditionalStepConfig conditionalStepConfig) => new ConditionalStep(
+        conditionalStepConfig.Condition,
+        conditionalStepConfig.ThenSteps,
+        conditionalStepConfig.ElseSteps,
+        this);
+
+    /// <summary>
+    /// Builds the steps.
+    /// </summary>
+    /// <param name="stepConfiguration"></param>
+    /// <returns></returns>
+    public IEnumerable<IStep> BuildSteps(Step[] stepConfiguration)
+    {
+        return stepConfiguration.Select(CreateInstance);
+    }
+
+    /// <summary>
+    /// Builds the steps.
+    /// </summary>
+    /// <param name="conditionalStepConfig">The conditional step configuration.</param>
+    /// <returns></returns>
+    public IEnumerable<IStep> BuildSteps(ConditionalStepConfig conditionalStepConfig) => [new ConditionalStep(
+        conditionalStepConfig.Condition,
+        conditionalStepConfig.ThenSteps,
+        conditionalStepConfig.ElseSteps,
+        this)];
+
+    private IStep CreateInstance(Step settingStep)
+    {
+        return settingStep.Setting != null
+            ? CreateConfigurableStep(settingStep.Type, settingStep.Setting)
+            : CreateInstance<IStep>(settingStep.Type);
+    }
+
+    private T CreateInstance<T>(string typeString) where T : class
+    {
+        var type = Type.GetType(typeString, throwOnError: false);
+        if (type == null)
         {
-            _stepConfiguration = stepConfiguration;
-            _conditionalStepConfig = conditionalStepConfig;
+            _logger.LogError("Cannot resolve type string: {TypeString} to a {Name} instance because the type is not found in this AppDomain",
+                typeString,
+                typeof(T).Name);
+
+            throw new InvalidOperationException($"Cannot resolve a valid {nameof(IStep)} implementation for the {typeString} fully-qualified assembly name");
         }
 
-        /// <summary>
-        /// Set the configured <see cref="Step"/> settings
-        /// </summary>
-        /// <param name="settingSteps"></param>
-        /// <returns></returns>
-        public static StepBuilder FromSettings(Step[] settingSteps)
-        {
-            return new StepBuilder(settingSteps, null);
-        }
+        return _serviceProvider.GetService(type) as T ??
+            throw new InvalidOperationException($"Cannot resolve a valid {nameof(IStep)} implementation for the {typeString} fully-qualified assembly name");
+    }
 
-        /// <summary>
-        /// Set the configured <see cref="Step"/> settings.
-        /// </summary>
-        /// <param name="conditionalStepConfig">The conditional step configuration.</param>
-        /// <returns></returns>
-        public static StepBuilder FromConditionalConfig(ConditionalStepConfig conditionalStepConfig)
-        {
-            return new StepBuilder(stepConfiguration: null, conditionalStepConfig: conditionalStepConfig);
-        }
+    private IConfigStep CreateConfigurableStep(string typeString, Setting[] settings)
+    {
+        var step = CreateInstance<IConfigStep>(typeString);
 
-        /// <summary>
-        /// Build the <see cref="IStep"/> implementation
-        /// </summary>
-        /// <returns></returns>
-        public IStep BuildAsSingleStep()
-        {
-            if (_conditionalStepConfig != null)
-            {
-                return new ConditionalStep(
-                    _conditionalStepConfig.Condition,
-                    _conditionalStepConfig.ThenSteps,
-                    _conditionalStepConfig.ElseSteps);
-            }
+        var dictionary = settings.ToDictionary(s => s.Key, s => s.Value);
 
-            IStep[] steps = _stepConfiguration.Select(CreateInstance).ToArray();
-            return new CompositeStep(steps);
-        }
+        step.Configure(dictionary);
 
-        /// <summary>
-        /// Builds the steps.
-        /// </summary>
-        /// <returns></returns>
-        public IEnumerable<IStep> BuildSteps()
-        {
-            if (_conditionalStepConfig != null)
-            {
-                var step = new ConditionalStep(
-                    _conditionalStepConfig.Condition,
-                    _conditionalStepConfig.ThenSteps,
-                    _conditionalStepConfig.ElseSteps);
-
-                return new[] {step};
-            }
-
-            return _stepConfiguration.Select(CreateInstance);
-        }
-
-        private static IStep CreateInstance(Step settingStep)
-        {
-            return settingStep.Setting != null
-                ? CreateConfigurableStep(settingStep)
-                : CreateInstance<IStep>(settingStep.Type);
-        }
-
-        private static IConfigStep CreateConfigurableStep(Step settingStep)
-        {
-            var step = CreateInstance<IConfigStep>(settingStep.Type);
-
-            Dictionary<string, string> dictionary = settingStep.Setting
-                .ToDictionary(setting => setting.Key, setting => setting.Value);
-
-            step.Configure(dictionary);
-
-            return step;
-        }
-
-        private static T CreateInstance<T>(string typeString, params object[] args) where T : class
-        {
-            if (!GenericTypeBuilder.CanResolveTypeThatImplements<IStep>(typeString))
-            {
-                throw new InvalidOperationException(
-                    $"Cannot resolve a valid {nameof(IStep)} implementation for the {typeString} fully-qualified assembly name");
-            }
-
-            return GenericTypeBuilder.FromType(typeString).SetArgs(args).Build<T>();
-        }
+        return step;
     }
 }

@@ -1,67 +1,73 @@
-﻿using System;
-using System.Net;
-using System.Threading.Tasks;
+﻿using System.Net.Http.Headers;
+using Eu.EDelivery.AS4.Http.Response;
+using Eu.EDelivery.AS4.Model.Internal;
+using Eu.EDelivery.AS4.Serialization;
+using Microsoft.Extensions.Logging;
+using MimeKit;
 
-namespace Eu.EDelivery.AS4.Http
+namespace Eu.EDelivery.AS4.Http;
+
+internal class ReliableHttpClient : HttpClientBase, IReliableHttpClient
 {
-    internal class ReliableHttpClient : IHttpClient
+    private readonly ISerializerProvider _serializerProvider;
+    private readonly IAS4ResponseFactory _responseFactory;
+
+    public ReliableHttpClient(
+        ILogger<ReliableHttpClient> logger,
+        ISerializerProvider serializerProvider,
+        IAS4ResponseFactory responseFactory) : base(logger)
     {
-        /// <summary>
-        /// Request a Message for the <see cref="IHttpClient"/> implementation.
-        /// </summary>
-        /// <param name="url"></param>
-        /// <param name="contentType"></param>
-        /// <returns></returns>
-        public HttpWebRequest Request(string url, string contentType)
-        {
-            var request = (HttpWebRequest)WebRequest.Create(url);
-            request.Method = "POST";
-            request.ContentType = contentType;
-            request.KeepAlive = false;
-            request.Connection = "Open";
-            request.ProtocolVersion = HttpVersion.Version11;
-            request.ServicePoint.ConnectionLimit = 12 * Environment.ProcessorCount;
-
-            ServicePointManager.Expect100Continue = false;
-
-            return request;
-        }
-
-        /// <summary>
-        /// Send a <see cref="HttpWebRequest"/> to the configured target.
-        /// </summary>
-        /// <param name="request">To be send <see cref="HttpWebRequest"/>.</param>
-        /// <returns></returns>
-        public async Task<(HttpWebResponse response, WebException exception)> Respond(HttpWebRequest request)
-        {
-            try
-            {
-                WebResponse response = await request.GetResponseAsync().ConfigureAwait(false);
-
-                return (response as HttpWebResponse, exception: null);
-            }
-            catch (WebException exception)
-            {
-                return (exception.Response as HttpWebResponse, exception);
-            }
-        }
+        _serializerProvider = serializerProvider;
+        _responseFactory = responseFactory;
     }
 
-    public interface IHttpClient
-    {
-        /// <summary>
-        /// Send a <see cref="HttpWebRequest"/> to the configured target.
-        /// </summary>
-        /// <param name="request">To be send <see cref="HttpWebRequest"/>.</param>
-        /// <returns></returns>
-        Task<(HttpWebResponse response, WebException exception)> Respond(HttpWebRequest request);
+    public IHttpRequest CreateRequest(string url, string contentType) => new AS4HttpRequest(url, contentType);
 
-        /// <summary>
-        /// Request a Message for the <see cref="IHttpClient"/> implementation.
-        /// </summary>
-        /// <param name="url"></param>
-        /// <param name="contentType"></param>
-        /// <returns></returns>
-        HttpWebRequest Request(string url, string contentType);
+    public async Task<IAS4Response> PostRequestAsync(IHttpRequest request, MessagingContext ctx, CancellationToken cancellation)
+    {
+        var requestImplementation = request as AS4HttpRequest
+            ?? throw new ArgumentException("Request is not an AS4HttpRequest", nameof(request));
+
+        var content = await CreateStreamContentAsync(ctx, requestImplementation, cancellation);
+
+        using var response = await PostRequestAsync(
+            requestImplementation.Url,
+            content,
+            requestImplementation.Certificate,
+            cancellation);
+
+        return await _responseFactory.CreateAsync(ctx, response, cancellation);
+    }
+
+    private async Task<HttpContent> CreateStreamContentAsync(MessagingContext ctx, AS4HttpRequest requestImplementation, CancellationToken cancellation)
+    {
+        if (ctx.ReceivedMessage != null)
+        {
+            var content = new StreamContent(ctx.ReceivedMessage.UnderlyingStream);
+            content.Headers.ContentType = new(ctx.ReceivedMessage.ContentType);
+            return content;
+        }
+
+        if (requestImplementation.ContentType != null)
+        {
+            var requestStream = new MemoryStream();
+            await _serializerProvider
+                .Get(requestImplementation.ContentType)
+                .SerializeAsync(ctx.AS4Message!, requestStream, cancellation);
+            requestStream.Position = 0;
+
+            var contentType = ContentType.Parse(requestImplementation.ContentType);
+
+            var content = new StreamContent(requestStream);
+            content.Headers.ContentType = new(contentType.MimeType);
+            foreach (var parameter in contentType.Parameters)
+            {
+                var headerValue = new NameValueHeaderValue(parameter.Name, parameter.Value);
+                content.Headers.ContentType.Parameters.Add(headerValue);
+            }
+            return content;
+        }
+
+        throw new InvalidOperationException("Content not available");
     }
 }

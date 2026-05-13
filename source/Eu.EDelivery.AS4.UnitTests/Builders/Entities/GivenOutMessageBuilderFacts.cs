@@ -1,100 +1,96 @@
-﻿using System;
-using System.Threading.Tasks;
-using Eu.EDelivery.AS4.Builders.Entities;
+﻿using Eu.EDelivery.AS4.Builders.Entities;
 using Eu.EDelivery.AS4.Entities;
 using Eu.EDelivery.AS4.Model.Core;
 using Eu.EDelivery.AS4.Model.PMode;
 using Eu.EDelivery.AS4.Serialization;
-using Xunit;
 
-namespace Eu.EDelivery.AS4.UnitTests.Builders.Entities
+namespace Eu.EDelivery.AS4.UnitTests.Builders.Entities;
+
+/// <summary>
+/// Testing <see cref="OutMessageBuilder" />
+/// </summary>
+public class GivenOutMessageBuilderFacts
 {
-    /// <summary>
-    /// Testing <see cref="OutMessageBuilder" />
-    /// </summary>
-    public class GivenOutMessageBuilderFacts
+    public class GivenValidArguments : GivenOutMessageBuilderFacts
     {
-        public class GivenValidArguments : GivenOutMessageBuilderFacts
+        [Fact]
+        public async Task ThenBuildOutMessageSucceedsWithAS4Message()
         {
-            [Fact]
-            public async Task ThenBuildOutMessageSucceedsWithAS4Message()
-            {
-                // Arrange
-                AS4Message as4Message = CreateAS4MessageWithUserMessage(Guid.NewGuid().ToString());
+            // Arrange
+            var as4Message = CreateAS4MessageWithUserMessage(Guid.NewGuid().ToString());
 
-                // Act
-                OutMessage outMessage = BuildForPrimaryMessageUnit(as4Message);
+            // Act
+            var outMessage = BuildForPrimaryMessageUnit(as4Message);
 
-                // Assert
-                Assert.NotNull(outMessage);
-                Assert.Equal(as4Message.ContentType, outMessage.ContentType);
-                Assert.Equal(MessageType.UserMessage, outMessage.EbmsMessageType);
-                Assert.Equal(await AS4XmlSerializer.ToStringAsync(ExpectedPMode()), outMessage.PMode);
-            }
-
-            [Fact]
-            public void ThenBuildOutMessageSucceedsWithAS4MessageAndEbmsMessageId()
-            {
-                // Arrange
-                string messageId = Guid.NewGuid().ToString();
-                AS4Message as4Message = CreateAS4MessageWithUserMessage(messageId);
-
-
-                // Act
-                OutMessage outMessage = BuildForPrimaryMessageUnit(as4Message);
-
-                // Assert
-                Assert.Equal(messageId, outMessage.EbmsMessageId);
-            }
-
-            [Fact]
-            public void ThenBuildOutMessageSucceedsForReceiptMessage()
-            {
-                // Arrange
-                string messageId = Guid.NewGuid().ToString();
-                AS4Message as4Message = AS4Message.Create(
-                    new Receipt(messageId, $"reftoid-{Guid.NewGuid()}"), 
-                    ExpectedPMode());
-
-                // Act
-                OutMessage outMessage = BuildForPrimaryMessageUnit(as4Message);
-
-                // Assert
-                Assert.Equal(messageId, outMessage.EbmsMessageId);
-                Assert.Equal(MessageType.Receipt, outMessage.EbmsMessageType);
-            }
-
-            [Fact]
-            public void ThenBuildOutMessageSucceedsForErrorMessage()
-            {
-                // Arrange
-                string messageId = Guid.NewGuid().ToString();
-                AS4Message as4Message = AS4Message.Create(new Error(messageId, $"user-{Guid.NewGuid()}"), ExpectedPMode());
-
-                // Act
-                OutMessage outMessage = BuildForPrimaryMessageUnit(as4Message);
-
-                // Assert
-                Assert.Equal(messageId, outMessage.EbmsMessageId);
-                Assert.Equal(MessageType.Error, outMessage.EbmsMessageType);
-            }
-
-            private OutMessage BuildForPrimaryMessageUnit(AS4Message m)
-            {
-                return OutMessageBuilder
-                    .ForMessageUnit(m.PrimaryMessageUnit, m.ContentType, ExpectedPMode())
-                    .BuildForSending("message-location", "message-url", OutStatus.NotApplicable, Operation.NotApplicable);
-            }
+            // Assert
+            Assert.NotNull(outMessage);
+            Assert.Equal(as4Message.ContentType, outMessage.ContentType);
+            Assert.Equal(MessageType.UserMessage, outMessage.EbmsMessageType);
+            Assert.Equal(await AS4XmlSerializer.ToStringAsync(ExpectedPMode(), CancellationToken.None), outMessage.PMode);
         }
 
-        protected SendingProcessingMode ExpectedPMode()
+        [Fact]
+        public void ThenBuildOutMessageSucceedsWithAS4MessageAndEbmsMessageId()
         {
-            return new SendingProcessingMode { Id = "pmode-id" };
+            // Arrange
+            var messageId = Guid.NewGuid().ToString();
+            var as4Message = CreateAS4MessageWithUserMessage(messageId);
+
+
+            // Act
+            var outMessage = BuildForPrimaryMessageUnit(as4Message);
+
+            // Assert
+            Assert.Equal(messageId, outMessage.EbmsMessageId);
         }
 
-        protected AS4Message CreateAS4MessageWithUserMessage(string messageId)
+        [Fact]
+        public void ThenBuildOutMessageSucceedsForReceiptMessage()
         {
-            return AS4Message.Create(new UserMessage(messageId), ExpectedPMode());
+            // Arrange
+            var messageId = Guid.NewGuid().ToString();
+            var as4Message = AS4Message.Create(
+                new Receipt(messageId, $"reftoid-{Guid.NewGuid()}"),
+                ExpectedPMode());
+
+            // Act
+            var outMessage = BuildForPrimaryMessageUnit(as4Message);
+
+            // Assert
+            Assert.Equal(messageId, outMessage.EbmsMessageId);
+            Assert.Equal(MessageType.Receipt, outMessage.EbmsMessageType);
         }
+
+        [Fact]
+        public void ThenBuildOutMessageSucceedsForErrorMessage()
+        {
+            // Arrange
+            var messageId = Guid.NewGuid().ToString();
+            var as4Message = AS4Message.Create(new Error(messageId, $"user-{Guid.NewGuid()}"), ExpectedPMode());
+
+            // Act
+            var outMessage = BuildForPrimaryMessageUnit(as4Message);
+
+            // Assert
+            Assert.Equal(messageId, outMessage.EbmsMessageId);
+            Assert.Equal(MessageType.Error, outMessage.EbmsMessageType);
+        }
+
+        private static OutMessage BuildForPrimaryMessageUnit(AS4Message m)
+        {
+            return OutMessageBuilder
+                .ForMessageUnit(m.PrimaryMessageUnit, m.ContentType, ExpectedPMode())
+                .BuildForSending("message-location", "message-url", OutStatus.NotApplicable, Operation.NotApplicable);
+        }
+    }
+
+    protected static SendingProcessingMode ExpectedPMode()
+    {
+        return new SendingProcessingMode { Id = "pmode-id" };
+    }
+
+    protected static AS4Message CreateAS4MessageWithUserMessage(string messageId)
+    {
+        return AS4Message.Create(new UserMessage(messageId), ExpectedPMode());
     }
 }

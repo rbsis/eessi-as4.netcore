@@ -1,0 +1,11 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    </PropertyGroup>
+    <ItemGroup>
+        <PackageReference Include="System.ServiceModel.Primitives" Version="8.1.2" />
+    </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Eu.EDelivery.AS4\Eu.EDelivery.AS4.csproj" />
+    </ItemGroup>
+</Project>

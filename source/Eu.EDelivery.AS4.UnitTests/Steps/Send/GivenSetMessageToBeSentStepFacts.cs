@@ -1,69 +1,69 @@
-﻿using System;
-using System.Threading.Tasks;
-using Eu.EDelivery.AS4.Entities;
+﻿using Eu.EDelivery.AS4.Entities;
 using Eu.EDelivery.AS4.Model.Core;
 using Eu.EDelivery.AS4.Model.Internal;
 using Eu.EDelivery.AS4.Steps.Send;
 using Eu.EDelivery.AS4.UnitTests.Common;
 using Eu.EDelivery.AS4.UnitTests.Model;
 using Eu.EDelivery.AS4.UnitTests.Repositories;
-using Xunit;
+using Microsoft.Extensions.Logging;
+using NSubstitute;
 
-namespace Eu.EDelivery.AS4.UnitTests.Steps.Send
+namespace Eu.EDelivery.AS4.UnitTests.Steps.Send;
+
+public class GivenSetMessageToBeSentStepFacts : GivenDatastoreFacts
 {
-    public class GivenSetMessageToBeSentStepFacts : GivenDatastoreFacts
+    private readonly InMemoryMessageBodyStore _messageBodyStore = new(Default.SerializerProvider);
+
+    [Fact]
+    public async Task StepSetsMessageToBeSent()
     {
-        private readonly InMemoryMessageBodyStore _messageBodyStore = new InMemoryMessageBodyStore();
+        // Assert
+        string messageId = Guid.NewGuid().ToString(),
+               expected = Guid.NewGuid().ToString();
 
-        [Fact]
-        public async Task StepSetsMessageToBeSent()
-        {
-            // Assert
-            string messageId = Guid.NewGuid().ToString(),
-                   expected = Guid.NewGuid().ToString();
+        var sut = new SetMessageToBeSentStep(
+            Substitute.For<ILogger<SetMessageToBeSentStep>>(),
+            Default.NewOutMessageService(this, _messageBodyStore));
 
-            var sut = new SetMessageToBeSentStep(GetDataStoreContext, _messageBodyStore);
+        var messagingContext = SetupMessagingContext(messageId, Operation.Processing, expected);
 
-            var messagingContext = SetupMessagingContext(messageId, Operation.Processing, expected);
+        // Act
+        await sut.ExecuteAsync(messagingContext, CancellationToken.None);
 
-            // Act
-            await sut.ExecuteAsync(messagingContext);
-
-            // Assert
-            GetDataStoreContext.AssertOutMessage(
-                messageId,
-                m =>
-                {
-                    Assert.Equal(expected, m.MessageLocation);
-                    Assert.Equal(Operation.ToBeSent, m.Operation);
-                });
-        }
-
-        private MessagingContext SetupMessagingContext(string ebmsMessageId, Operation operation, string messageLocation)
-        {
-            var outMessage = new OutMessage(ebmsMessageId: ebmsMessageId)
+        // Assert
+        GetDataStoreContext.AssertOutMessage(
+            messageId,
+            m =>
             {
-                MessageLocation = messageLocation
-            };
+                Assert.NotNull(m);
+                Assert.Equal(expected, m.MessageLocation);
+                Assert.Equal(Operation.ToBeSent, m.Operation);
+            });
+    }
 
-            outMessage.Operation = operation;
-
-            var insertedOutMessage = GetDataStoreContext.InsertOutMessage(outMessage, withReceptionAwareness: false);
-
-            Assert.NotEqual(default(long), insertedOutMessage.Id);
-
-            var receivedMessage = new ReceivedEntityMessage(insertedOutMessage);
-
-            return new MessagingContext(
-                AS4Message.Create(new FilledUserMessage(ebmsMessageId)),
-                receivedMessage, 
-                MessagingContextMode.Send);
-        }
-
-        protected override void Disposing()
+    private MessagingContext SetupMessagingContext(string ebmsMessageId, Operation operation, string messageLocation)
+    {
+        var outMessage = new OutMessage(ebmsMessageId: ebmsMessageId)
         {
-            _messageBodyStore.Dispose();
-            base.Disposing();
-        }
+            MessageLocation = messageLocation,
+            Operation = operation
+        };
+
+        var insertedOutMessage = GetDataStoreContext.InsertOutMessage(outMessage, withReceptionAwareness: false);
+
+        Assert.NotEqual(default, insertedOutMessage.Id);
+
+        var receivedMessage = new ReceivedEntityMessage(insertedOutMessage);
+
+        return new MessagingContext(
+            AS4Message.Create(new FilledUserMessage(ebmsMessageId)),
+            receivedMessage,
+            MessagingContextMode.Send);
+    }
+
+    protected override void Disposing()
+    {
+        _messageBodyStore.Dispose();
+        base.Disposing();
     }
 }

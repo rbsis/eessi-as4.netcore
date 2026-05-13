@@ -1,53 +1,67 @@
-﻿using System.IO;
-using System.Net;
-using System.Net.Http;
-using System.Threading.Tasks;
+﻿using System.Net;
 using Eu.EDelivery.AS4.Strategies.Retriever;
-using Xunit;
 
-namespace Eu.EDelivery.AS4.UnitTests.Strategies.Retriever
+namespace Eu.EDelivery.AS4.UnitTests.Strategies.Retriever;
+
+public class GivenWebPayloadRetrieverFacts
 {
-    public class GivenWebPayloadRetrieverFacts
-    {
-        [Fact]
-        public async Task ThenDownloadPayloadSucceeds()
-        {
-            // Arrange
-            const string expectedPayload = "message data!", location = "http://ignored/path";
-            var retriever = new HttpPayloadRetriever(request => RespondWithContent(expectedPayload));
+    const string Location = "http://ignored/path";
 
-            // Act
-            using (var streamReader = new StreamReader(await retriever.RetrievePayloadAsync(location)))
-            {
-                // Assert
-                string actualPayload = streamReader.ReadToEnd();
-                Assert.Equal(expectedPayload, actualPayload);
-            }
+    [Fact]
+    public async Task ThenDownloadPayloadSucceeds()
+    {
+        // Arrange
+        const string ExpectedPayload = "message data!";
+        var retriever = new HttpPayloadRetriever(new StubRetrieverHttpClient(ExpectedPayload));
+
+        // Act
+        using var streamReader = new StreamReader(await retriever.RetrievePayloadAsync(Location, CancellationToken.None));
+        // Assert
+        var actualPayload = await streamReader.ReadToEndAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(ExpectedPayload, actualPayload);
+    }
+
+    [Fact]
+    public async Task ThenDownloadFailedIfReturnCodeIsntSuccessful()
+    {
+        // Arrange
+        var retriever = new HttpPayloadRetriever(new SaboteurRetrieverHttpClient(HttpStatusCode.BadGateway));
+
+        // Act
+        var actualPayload = await retriever.RetrievePayloadAsync(Location, CancellationToken.None);
+
+        // Assert
+        Assert.Equal(Stream.Null, actualPayload);
+    }
+
+    private class StubRetrieverHttpClient : IRetrieverHttpClient
+    {
+        private readonly string _expectedPayload;
+
+        public StubRetrieverHttpClient(string expectedPayload)
+        {
+            _expectedPayload = expectedPayload;
         }
 
-        private static Task<HttpResponseMessage> RespondWithContent(string expectedPayload)
+        public Task<HttpResponseMessage> GetPayloadAsync(string url, CancellationToken cancellation)
         {
-            var response = new HttpResponseMessage {Content = new StringContent(expectedPayload)};
+            var response = new HttpResponseMessage { Content = new StringContent(_expectedPayload) };
             return Task.FromResult(response);
         }
+    }
 
-        [Fact]
-        public async Task ThenDownloadFailed_IfReturnCodeIsntSuccessful()
+    private class SaboteurRetrieverHttpClient : IRetrieverHttpClient
+    {
+        private readonly HttpStatusCode _statusCode;
+
+        public SaboteurRetrieverHttpClient(HttpStatusCode statusCode)
         {
-            // Arrange
-            const string location = "http://ignored/path";
-            var retriever = new HttpPayloadRetriever(request => RespondWithStatusCode(HttpStatusCode.BadGateway));
-
-            // Act
-            Stream actualPayload = await retriever.RetrievePayloadAsync(location);
-
-            // Assert
-            Assert.Equal(Stream.Null, actualPayload);
+            _statusCode = statusCode;
         }
 
-        private static Task<HttpResponseMessage> RespondWithStatusCode(HttpStatusCode statusCode)
+        public Task<HttpResponseMessage> GetPayloadAsync(string url, CancellationToken cancellation)
         {
-            var response = new HttpResponseMessage(statusCode);
+            var response = new HttpResponseMessage(_statusCode);
             return Task.FromResult(response);
         }
     }

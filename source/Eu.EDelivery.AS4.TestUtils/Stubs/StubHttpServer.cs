@@ -1,7 +1,4 @@
-﻿using System;
-using System.Net;
-using System.Threading;
-using System.Threading.Tasks;
+﻿using System.Net;
 
 namespace Eu.EDelivery.AS4.TestUtils.Stubs
 {
@@ -38,12 +35,12 @@ namespace Eu.EDelivery.AS4.TestUtils.Stubs
             server.Prefixes.Add(listenAt);
             server.Start();
 
-            if (server.IsListening == false)
+            if (!server.IsListening)
             {
                 throw new InvalidOperationException($"The http server failed to start listening at {listenAt}");
             }
 
-            Task<HttpListenerContext> request = server.GetContextAsync();
+            var request = server.GetContextAsync();
             Console.WriteLine($@"Stub HTTP Server: received request at: {listenAt}");
 
 #pragma warning disable 1998
@@ -88,9 +85,9 @@ namespace Eu.EDelivery.AS4.TestUtils.Stubs
 
             while (server.IsListening)
             {
-                HttpListenerContext context = server.GetContext();
+                var context = server.GetContext();
 
-                ServerLifetime result = responseHandler(context.Request, context.Response);
+                var result = responseHandler(context.Request, context.Response);
                 Console.WriteLine(
                     $@"Stub HTTP Server: respond to request, StatusCode {context.Response.StatusCode}");
 

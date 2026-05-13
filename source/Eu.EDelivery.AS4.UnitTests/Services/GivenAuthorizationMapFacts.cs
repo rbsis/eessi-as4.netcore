@@ -1,149 +1,146 @@
-﻿using System;
-using System.Security.Cryptography.X509Certificates;
+﻿using System.Security.Cryptography.X509Certificates;
 using Eu.EDelivery.AS4.Model.Core;
 using Eu.EDelivery.AS4.Services.PullRequestAuthorization;
 using Eu.EDelivery.AS4.TestUtils;
-using Xunit;
 
-namespace Eu.EDelivery.AS4.UnitTests.Services
+namespace Eu.EDelivery.AS4.UnitTests.Services;
+
+public class GivenAuthorizationMapFacts
 {
-    public class GivenAuthorizationMapFacts
+    public class AuthorizedFacts : GivenAuthorizationMapFacts
     {
-        public class AuthorizedFacts : GivenAuthorizationMapFacts
+        [Fact]
+        public void IfMpcMatchesCertificate()
         {
-            [Fact]
-            public void IfMpcMatchesCertificate()
-            {
-                var certificate = GetSigningCertificate();
+            var certificate = GetSigningCertificate();
 
-                var provider = new StubAuthorizationMapProvider(new[]
-                {
-                    new PullRequestAuthorizationEntry("mpc1", certificate.Thumbprint, true), new PullRequestAuthorizationEntry("mpc2", certificate.Thumbprint, false)
-                });
+            var provider = new StubAuthorizationMapProvider(
+            [
+                new PullRequestAuthorizationEntry("mpc1", certificate.Thumbprint, true), new PullRequestAuthorizationEntry("mpc2", certificate.Thumbprint, false)
+            ]);
 
-                var as4Message = CreatePullRequest("mpc1");
+            var as4Message = CreatePullRequest("mpc1");
 
-                var signedPullRequest = SignAS4MessageWithCertificate(as4Message, certificate);
+            var signedPullRequest = SignAS4MessageWithCertificate(as4Message, certificate);
 
-                var service = new PullAuthorizationMapService(provider);
+            var service = new PullAuthorizationMapService(provider, Default.CertificateRepository);
 
-                Assert.True(service.IsPullRequestAuthorized(signedPullRequest), "PullRequest should be allowed since entry exists for MPC and cert-thumbprint");
-            }
-
-            [Fact]
-            public void IfNoEntriesExistForMpcInAuthorizationMap()
-            {
-                var certificate = GetSigningCertificate();
-
-                var provider = new StubAuthorizationMapProvider(new[]
-                {
-                    new PullRequestAuthorizationEntry("mpc1", certificate.Thumbprint, false), new PullRequestAuthorizationEntry("mpc2", certificate.Thumbprint, false)
-                });
-
-                var as4Message = CreatePullRequest("mpc3");
-
-                var signedPullRequest = SignAS4MessageWithCertificate(as4Message, certificate);
-
-                var service = new PullAuthorizationMapService(provider);
-
-                Assert.True(service.IsPullRequestAuthorized(signedPullRequest), "PullRequest should be allowed since no entries are present for MPC3 in Authorization Map");
-            }
-
-            [Fact]
-            public void IfPullRequestIsNotSignedAndNoEntriesExistForMpcInAuthorizationMap()
-            {
-                var certificate = GetSigningCertificate();
-
-                var provider = new StubAuthorizationMapProvider(new[]
-                {
-                    new PullRequestAuthorizationEntry("mpc1", certificate.Thumbprint, false), new PullRequestAuthorizationEntry("mpc2", certificate.Thumbprint, false)
-                });
-
-                var pullRequest = CreatePullRequest("mpc3");
-
-                var service = new PullAuthorizationMapService(provider);
-
-                Assert.True(service.IsPullRequestAuthorized(pullRequest));
-            }
-
+            Assert.True(service.IsPullRequestAuthorized(signedPullRequest), "PullRequest should be allowed since entry exists for MPC and cert-thumbprint");
         }
 
-        public class NotAuthorizedFacts
+        [Fact]
+        public void IfNoEntriesExistForMpcInAuthorizationMap()
         {
-            [Fact]
-            public void IfCertificateIsNotAllowedInAuthorizationMap()
-            {
-                var certificate = GetSigningCertificate();
+            var certificate = GetSigningCertificate();
 
-                var provider = new StubAuthorizationMapProvider(new[]
-                {
-                    new PullRequestAuthorizationEntry("mpc1", certificate.Thumbprint, false), new PullRequestAuthorizationEntry("mpc2", certificate.Thumbprint, true)
-                });
+            var provider = new StubAuthorizationMapProvider(
+            [
+                new PullRequestAuthorizationEntry("mpc1", certificate.Thumbprint, false), new PullRequestAuthorizationEntry("mpc2", certificate.Thumbprint, false)
+            ]);
 
-                var as4Message = CreatePullRequest("mpc1");
+            var as4Message = CreatePullRequest("mpc3");
 
-                var signedPullRequest = SignAS4MessageWithCertificate(as4Message, certificate);
+            var signedPullRequest = SignAS4MessageWithCertificate(as4Message, certificate);
 
-                var service = new PullAuthorizationMapService(provider);
+            var service = new PullAuthorizationMapService(provider, Default.CertificateRepository);
 
-                Assert.False(service.IsPullRequestAuthorized(signedPullRequest), "PullRequest should not be allowed since certificate is not allowed in PullAuthorizationMap");
-            }
-
-            [Fact]
-            public void IfCertificateIsNotPresentInAuthorizationMap()
-            {
-                var certificate = GetSigningCertificate();
-
-                var provider = new StubAuthorizationMapProvider(new[]
-                {
-                    new PullRequestAuthorizationEntry("mpc1", "ABCDEFGHIJKLM", true), new PullRequestAuthorizationEntry("mpc2", certificate.Thumbprint, true)
-                });
-
-                var as4Message = CreatePullRequest("mpc1");
-
-                var signedPullRequest = SignAS4MessageWithCertificate(as4Message, certificate);
-
-                var service = new PullAuthorizationMapService(provider);
-
-                Assert.False(service.IsPullRequestAuthorized(signedPullRequest), "PullRequest should not be allowed since certificate is not present in PullAuthorizationMap");
-            }
-
-            [Fact]
-            public void IfPullRequestIsNotSignedAndEntriesExistInAuthorizationMap()
-            {
-                var provider = new StubAuthorizationMapProvider(new[]
-                {
-                    new PullRequestAuthorizationEntry("mpc1", "ABCDEFGHIJKLM", true), new PullRequestAuthorizationEntry("mpc2", "ABCDEFGHIJKLM", true)
-                });
-
-                var pullRequest = CreatePullRequest("mpc1");
-
-                var service = new PullAuthorizationMapService(provider);
-
-                Assert.False(service.IsPullRequestAuthorized(pullRequest), "PullRequest should not be allowed since PullRequest is not signed");
-            }
+            Assert.True(service.IsPullRequestAuthorized(signedPullRequest), "PullRequest should be allowed since no entries are present for MPC3 in Authorization Map");
         }
 
-        private static X509Certificate2 GetSigningCertificate()
+        [Fact]
+        public void IfPullRequestIsNotSignedAndNoEntriesExistForMpcInAuthorizationMap()
         {
-            var cert = new X509Certificate2(Properties.Resources.holodeck_partya_certificate,
-                                            Properties.Resources.certificate_password, X509KeyStorageFlags.Exportable);
+            var certificate = GetSigningCertificate();
 
-            Assert.NotNull(cert.PrivateKey);
+            var provider = new StubAuthorizationMapProvider(
+            [
+                new PullRequestAuthorizationEntry("mpc1", certificate.Thumbprint, false), new PullRequestAuthorizationEntry("mpc2", certificate.Thumbprint, false)
+            ]);
 
-            return cert;
+            var pullRequest = CreatePullRequest("mpc3");
+
+            var service = new PullAuthorizationMapService(provider, Default.CertificateRepository);
+
+            Assert.True(service.IsPullRequestAuthorized(pullRequest));
         }
 
-        private static AS4Message SignAS4MessageWithCertificate(AS4Message message, X509Certificate2 certificate)
+    }
+
+    public class NotAuthorizedFacts
+    {
+        [Fact]
+        public void IfCertificateIsNotAllowedInAuthorizationMap()
         {
-            return AS4MessageUtils.SignWithCertificate(message, certificate);
+            var certificate = GetSigningCertificate();
+
+            var provider = new StubAuthorizationMapProvider(
+            [
+                new PullRequestAuthorizationEntry("mpc1", certificate.Thumbprint, false), new PullRequestAuthorizationEntry("mpc2", certificate.Thumbprint, true)
+            ]);
+
+            var as4Message = CreatePullRequest("mpc1");
+
+            var signedPullRequest = SignAS4MessageWithCertificate(as4Message, certificate);
+
+            var service = new PullAuthorizationMapService(provider, Default.CertificateRepository);
+
+            Assert.False(service.IsPullRequestAuthorized(signedPullRequest), "PullRequest should not be allowed since certificate is not allowed in PullAuthorizationMap");
         }
 
-        private static AS4Message CreatePullRequest(string mpc)
+        [Fact]
+        public void IfCertificateIsNotPresentInAuthorizationMap()
         {
-            PullRequest pr = new PullRequest($"pr-{Guid.NewGuid()}", mpc);
+            var certificate = GetSigningCertificate();
 
-            return AS4Message.Create(pr, null);
+            var provider = new StubAuthorizationMapProvider(
+            [
+                new PullRequestAuthorizationEntry("mpc1", "ABCDEFGHIJKLM", true), new PullRequestAuthorizationEntry("mpc2", certificate.Thumbprint, true)
+            ]);
+
+            var as4Message = CreatePullRequest("mpc1");
+
+            var signedPullRequest = SignAS4MessageWithCertificate(as4Message, certificate);
+
+            var service = new PullAuthorizationMapService(provider, Default.CertificateRepository);
+
+            Assert.False(service.IsPullRequestAuthorized(signedPullRequest), "PullRequest should not be allowed since certificate is not present in PullAuthorizationMap");
         }
+
+        [Fact]
+        public void IfPullRequestIsNotSignedAndEntriesExistInAuthorizationMap()
+        {
+            var provider = new StubAuthorizationMapProvider(
+            [
+                new PullRequestAuthorizationEntry("mpc1", "ABCDEFGHIJKLM", true), new PullRequestAuthorizationEntry("mpc2", "ABCDEFGHIJKLM", true)
+            ]);
+
+            var pullRequest = CreatePullRequest("mpc1");
+
+            var service = new PullAuthorizationMapService(provider, Default.CertificateRepository);
+
+            Assert.False(service.IsPullRequestAuthorized(pullRequest), "PullRequest should not be allowed since PullRequest is not signed");
+        }
+    }
+
+    private static X509Certificate2 GetSigningCertificate()
+    {
+        var cert = new X509Certificate2(Properties.Resources.holodeck_partya_certificate,
+                                        Properties.Resources.certificate_password, X509KeyStorageFlags.Exportable);
+
+        Assert.NotNull(cert.GetRSAPrivateKey());
+
+        return cert;
+    }
+
+    private static AS4Message SignAS4MessageWithCertificate(AS4Message message, X509Certificate2 certificate)
+    {
+        return AS4MessageUtils.SignWithCertificate(message, certificate);
+    }
+
+    private static AS4Message CreatePullRequest(string mpc)
+    {
+        var pr = new PullRequest($"pr-{Guid.NewGuid()}", mpc);
+
+        return AS4Message.Create(pr, null);
     }
 }

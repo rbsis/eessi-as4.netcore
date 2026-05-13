@@ -1,24 +1,21 @@
-﻿using System.IO;
-using System.Threading.Tasks;
-using Eu.EDelivery.AS4.Strategies.Retriever;
-using Xunit;
+﻿using Eu.EDelivery.AS4.Strategies.Retriever;
+using Microsoft.Extensions.Logging.Abstractions;
 
-namespace Eu.EDelivery.AS4.UnitTests.Strategies.Retriever
+namespace Eu.EDelivery.AS4.UnitTests.Strategies.Retriever;
+
+public class GivenTempFilePayloadRetrieverFacts
 {
-    public class GivenTempFilePayloadRetrieverFacts
+    [Fact]
+    public async Task TemporaryFileGetsDeletedAfterBeingRetrieved()
     {
-        [Fact]
-        public async Task TemporaryFileGetsDeletedAfterBeingRetrieved()
-        {
-            // Arrange
-            string fixture = Path.GetTempFileName();
-            var sut = new TempFilePayloadRetriever();
+        // Arrange
+        var fixture = Path.GetTempFileName();
+        var sut = new TempFilePayloadRetriever(NullLogger<TempFilePayloadRetriever>.Instance);
 
-            // Act
-            (await sut.RetrievePayloadAsync(fixture)).Dispose();
+        // Act
+        await (await sut.RetrievePayloadAsync(fixture, CancellationToken.None)).DisposeAsync();
 
-            // Assert
-            Assert.False(File.Exists(fixture), "Temporary file isn't deleted afterwards");
-        }
+        // Assert
+        Assert.False(File.Exists(fixture), "Temporary file isn't deleted afterwards");
     }
 }

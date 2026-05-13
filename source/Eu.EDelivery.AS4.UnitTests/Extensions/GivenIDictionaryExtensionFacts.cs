@@ -1,68 +1,63 @@
-﻿using System;
-using System.Collections.Generic;
-using Eu.EDelivery.AS4.Exceptions;
-using Eu.EDelivery.AS4.Extensions;
-using Xunit;
+﻿using Eu.EDelivery.AS4.Extensions;
 
-namespace Eu.EDelivery.AS4.UnitTests.Extensions
+namespace Eu.EDelivery.AS4.UnitTests.Extensions;
+
+/// <summary>
+/// Testing <see cref="AS4.Extensions.DictionaryExtensions" />
+/// </summary>
+public class GivenIDictionaryExtensionFacts
 {
-    /// <summary>
-    /// Testing <see cref="AS4.Extensions.DictionaryExtensions" />
-    /// </summary>
-    public class GivenIDictionaryExtensionFacts
+    private const string TestKey = "$mandatory-key$";
+    private const string TestValue = "$mandatory-value$";
+    private readonly IDictionary<string, string> _dictionary;
+
+    public GivenIDictionaryExtensionFacts()
     {
-        private const string TestKey = "$mandatory-key$";
-        private const string TestValue = "$mandatory-value$";
-        private readonly IDictionary<string, string> _dictionary;
+        _dictionary = new Dictionary<string, string> { [TestKey] = TestValue };
+    }
 
-        public GivenIDictionaryExtensionFacts()
+    /// <summary>
+    /// Testing if the IDictionaryExtensions succeeds
+    /// </summary>
+    public class GivenIDictionaryExtesionSucceeds : GivenIDictionaryExtensionFacts
+    {
+        [Fact]
+        public void ThenReadMandatoryPropertySucceeds()
         {
-            _dictionary = new Dictionary<string, string> {[TestKey] = TestValue};
+            // Act
+            var value = _dictionary.ReadMandatoryProperty(TestKey);
+
+            // Assert
+            Assert.Same(TestValue, value);
         }
 
-        /// <summary>
-        /// Testing if the IDictionaryExtensions succeeds
-        /// </summary>
-        public class GivenIDictionaryExtesionSucceeds : GivenIDictionaryExtensionFacts
+        [Fact]
+        public void ThenReadOptionalPropertySucceeds()
         {
-            [Fact]
-            public void ThenReadMandatoryPropertySucceeds()
-            {
-                // Act
-                string value = _dictionary.ReadMandatoryProperty(TestKey);
+            // Arrange
+            const string DefaultValue = "$default$";
 
-                // Assert
-                Assert.Same(TestValue, value);
-            }
+            // Act
+            var value = _dictionary.ReadOptionalProperty("doesn't exist", DefaultValue);
 
-            [Fact]
-            public void ThenReadOptionalPropertySucceeds()
-            {
-                // Arrange
-                const string defaultValue = "$default$";
-
-                // Act
-                string value = _dictionary.ReadOptionalProperty("doesn't exist", defaultValue);
-
-                // Assert
-                Assert.Same(defaultValue, value);
-            }
+            // Assert
+            Assert.Same(DefaultValue, value);
         }
+    }
 
-        /// <summary>
-        /// Testing if the IDictionaryExtensions fails
-        /// </summary>
-        public class GivenIDictionaryExtensionsFails : GivenIDictionaryExtensionFacts
+    /// <summary>
+    /// Testing if the IDictionaryExtensions fails
+    /// </summary>
+    public class GivenIDictionaryExtensionsFails : GivenIDictionaryExtensionFacts
+    {
+        [Fact]
+        public void ThenReadMandatoryPropertyFails()
         {
-            [Fact]
-            public void ThenReadMandatoryPropertyFails()
-            {
-                // Arrange
-                const string doesntExistedKey = "$doesn't existed key$";
+            // Arrange
+            const string DoesntExistedKey = "$doesn't existed key$";
 
-                // Act / Assert
-                Assert.ThrowsAny<Exception>(() => _dictionary.ReadMandatoryProperty(doesntExistedKey));
-            }
+            // Act / Assert
+            Assert.ThrowsAny<Exception>(() => _dictionary.ReadMandatoryProperty(DoesntExistedKey));
         }
     }
 }

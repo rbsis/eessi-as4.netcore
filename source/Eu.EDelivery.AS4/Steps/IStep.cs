@@ -1,33 +1,30 @@
-﻿using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-using Eu.EDelivery.AS4.Model.Internal;
+﻿using Eu.EDelivery.AS4.Model.Internal;
 
-namespace Eu.EDelivery.AS4.Steps
+namespace Eu.EDelivery.AS4.Steps;
+
+/// <summary>
+/// Interface <see cref="IStep" /> to describe a single step to execute
+/// </summary>
+public interface IStep
 {
     /// <summary>
-    /// Interface <see cref="IStep" /> to describe a single step to execute
+    /// Execute the step on a given <paramref name="messagingContext"/>.
     /// </summary>
-    public interface IStep
-    {
-        /// <summary>
-        /// Execute the step on a given <paramref name="messagingContext"/>.
-        /// </summary>
-        /// <param name="messagingContext"><see cref="MessagingContext"/> on which the step must be executed.</param>
-        /// <returns></returns>
-        Task<StepResult> ExecuteAsync(MessagingContext messagingContext);
-    }
+    /// <param name="messagingContext"><see cref="MessagingContext"/> on which the step must be executed.</param>
+    /// <param name="cancellation"></param>
+    /// <returns></returns>
+    Task<StepResult> ExecuteAsync(MessagingContext messagingContext, CancellationToken cancellation);
+}
 
+/// <summary>
+/// Versioned interface for the <see cref="IStep"/> interface
+/// to make the <see cref="IStep"/> implementation configurable
+/// </summary>
+public interface IConfigStep : IStep
+{
     /// <summary>
-    /// Versioned interface for the <see cref="IStep"/> interface
-    /// to make the <see cref="IStep"/> implementation configurable
+    /// Configure the step with a given Property Dictionary
     /// </summary>
-    public interface IConfigStep : IStep
-    {
-        /// <summary>
-        /// Configure the step with a given Property Dictionary
-        /// </summary>
-        /// <param name="properties"></param>
-        void Configure(IDictionary<string, string> properties);
-    }
+    /// <param name="properties"></param>
+    void Configure(IDictionary<string, string> properties);
 }

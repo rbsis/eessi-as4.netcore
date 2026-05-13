@@ -1,81 +1,72 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
-using System.Web;
+﻿using System.Web;
 using System.Xml;
 using System.Xml.Linq;
 using System.Xml.XPath;
 using Eu.EDelivery.AS4.Model.PMode;
 using Eu.EDelivery.AS4.Services.DynamicDiscovery;
-using Xunit;
+using Microsoft.Extensions.Logging.Abstractions;
 
-namespace Eu.EDelivery.AS4.UnitTests.Services.DynamicDiscovery
+namespace Eu.EDelivery.AS4.UnitTests.Services.DynamicDiscovery;
+
+public class GivenPeppolDynamicDiscoveryProfileFacts
 {
-    public class GivenPeppolDynamicDiscoveryProfileFacts
+    [Fact]
+    public void HttpUtilityEncodesColon()
     {
-        [Fact]
-        public void HttpUtility_Encodes_Colon()
-        {
-            const string uri = "http://test:test";
-            Assert.DoesNotContain(":", HttpUtility.UrlEncode(uri));
-        }
+        const string Uri = "http://test:test";
+        Assert.DoesNotContain(":", HttpUtility.UrlEncode(Uri));
+    }
 
-        [Fact]
-        public void DecorateSendingPModeWithSMPResponse()
-        {
-            // Act
-            SendingProcessingMode actual = ExercisePModeDecorationWithSmp(CompleteSMPResponse());
+    [Fact]
+    public void DecorateSendingPModeWithSMPResponse()
+    {
+        // Act
+        var actual = ExercisePModeDecorationWithSmp(CompleteSMPResponse());
 
-            // Assert
-            Assert.NotEmpty(actual.PushConfiguration.Protocol.Url);
-            Assert.NotEmpty(actual.MessagePackaging.PartyInfo.ToParty.PartyIds);
+        // Assert
+        Assert.NotNull(actual);
+        Assert.NotNull(actual.PushConfiguration);
+        Assert.NotNull(actual.PushConfiguration.Protocol.Url);
+        Assert.NotEmpty(actual.PushConfiguration.Protocol.Url!);
+        Assert.NotNull(actual.MessagePackaging.PartyInfo);
+        Assert.NotNull(actual.MessagePackaging.PartyInfo.ToParty);
+        Assert.NotNull(actual.MessagePackaging.PartyInfo.ToParty.PartyIds);
+        Assert.NotEmpty(actual.MessagePackaging.PartyInfo.ToParty.PartyIds);
+        Assert.NotNull(actual.MessagePackaging.MessageProperties);
 
-            IEnumerable<string> propNames = actual.MessagePackaging.MessageProperties.Select(p => p.Name);
-            Assert.Contains(propNames, p => p == "finalRecipient" || p == "originalSender");
-        }
+        var propNames = actual.MessagePackaging.MessageProperties.Select(p => p.Name);
+        Assert.Contains(propNames, p => p == "finalRecipient" || p == "originalSender");
+    }
 
-        private static SendingProcessingMode ExercisePModeDecorationWithSmp(string smpResponse)
-        {
-            var sut = new PeppolDynamicDiscoveryProfile();
+    [Theory]
+    [InlineData("//*[local-name()='ProcessIdentifier']")]
+    [InlineData("//*[local-name()='DocumentIdentifier']")]
+    [InlineData("//*[local-name()='Endpoint']")]
+    [InlineData("//*[local-name()='Address']")]
+    public void DecorationPModeFailsWithMissingRequiredElements(string xpath)
+    {
+        var doc = XDocument.Parse(CompleteSMPResponse());
+        doc.XPathSelectElement(xpath)?.Remove();
 
-            var pmode = new SendingProcessingMode();
-            var smpMetaData = new XmlDocument();
-            smpMetaData.LoadXml(smpResponse);
+        Assert.Throws<InvalidDataException>(
+            () => ExercisePModeDecorationWithSmp(doc));
+    }
 
-            return sut.DecoratePModeWithSmpMetaData(pmode, smpMetaData).CompletedSendingPMode;
-        }
+    [Fact]
+    public void DecorationPModeFailsWithMissingEndpointTransportProfile()
+    {
+        var doc = XDocument.Parse(CompleteSMPResponse());
+        doc.XPathSelectElement("//*[local-name()='Endpoint']")
+           ?.Attribute(XName.Get("transportProfile"))
+           ?.Remove();
 
-        [Theory]
-        [InlineData("//*[local-name()='ProcessIdentifier']")]
-        [InlineData("//*[local-name()='DocumentIdentifier']")]
-        [InlineData("//*[local-name()='Endpoint']")]
-        [InlineData("//*[local-name()='Address']")]
-        public void Decoration_PMode_Fails_With_Missing_Required_Elements(string xpath)
-        {
-            XDocument doc = XDocument.Parse(CompleteSMPResponse());
-            doc.XPathSelectElement(xpath)?.Remove();
+        Assert.Throws<InvalidDataException>(
+            () => ExercisePModeDecorationWithSmp(doc));
+    }
 
-            Assert.Throws<InvalidDataException>(
-                () => ExercisePModeDecorationWithSmp(doc));
-        }
-
-        [Fact]
-        public void Decoration_PMode_Fails_With_Missing_Endpoint_TransportProfile()
-        {
-            XDocument doc = XDocument.Parse(CompleteSMPResponse());
-            doc.XPathSelectElement("//*[local-name()='Endpoint']")
-               ?.Attribute(XName.Get("transportProfile"))
-               ?.Remove();
-
-            Assert.Throws<InvalidDataException>(
-                () => ExercisePModeDecorationWithSmp(doc));
-        }
-
-        private static string CompleteSMPResponse()
-        {
-            return @"<?xml version=""1.0"" encoding=""UTF-8"" standalone=""no""?>
+    private static string CompleteSMPResponse()
+    {
+        return @"<?xml version=""1.0"" encoding=""UTF-8"" standalone=""no""?>
                 <SignedServiceMetadata 
                     xmlns=""http://docs.oasis-open.org/bdxr/ns/SMP/2016/05"">
                     <ServiceMetadata>
@@ -101,71 +92,81 @@ namespace Eu.EDelivery.AS4.UnitTests.Services.DynamicDiscovery
                         </ServiceInformation>
                     </ServiceMetadata>
                 </SignedServiceMetadata>";
-        }
+    }
 
-        private static SendingProcessingMode ExercisePModeDecorationWithSmp(XDocument smpResponse)
+    [Fact]
+    public void DecorateNotRecreatePushConfigurationProtocol()
+    {
+        // Arrange
+        var protocol = new Protocol();
+        var push = new PushConfiguration()
         {
-            return ExercisePModeDecorationWithSmp(smpResponse, new SendingProcessingMode());
-        }
+            Protocol = protocol,
+            TlsConfiguration = { IsEnabled = true }
+        };
+        var fixture = new SendingProcessingMode { PushConfiguration = push };
 
-        [Fact]
-        public void Decorate_Not_Recreate_PushConfiguration_Protocol()
+        // Act
+        var result = ExercisePModeDecorationWithCompleteSmp(fixture);
+
+        // Assert
+        Assert.NotNull(result.PushConfiguration);
+        Assert.Same(protocol, result.PushConfiguration.Protocol);
+        Assert.True(result.PushConfiguration.TlsConfiguration.IsEnabled);
+    }
+
+    [Fact]
+    public void DecorateNotRecreateCollaboration()
+    {
+        // Arrange
+        var collaboration = new CollaborationInfo
         {
-            // Arrange
-            var protocol = new Protocol();
-            var push = new PushConfiguration()
+            ConversationId = "5"
+        };
+        var fixture = new SendingProcessingMode
+        {
+            MessagePackaging =
             {
-                Protocol = protocol,
-                TlsConfiguration = { IsEnabled = true }
-            };
-            var fixture = new SendingProcessingMode { PushConfiguration = push };
-
-            // Act
-            SendingProcessingMode result = ExercisePModeDecorationWithCompleteSmp(fixture);
-
-            // Assert
-            Assert.Same(protocol, result.PushConfiguration.Protocol);
-            Assert.True(result.PushConfiguration.TlsConfiguration.IsEnabled);
-        }
-
-        [Fact]
-        public void Decorate_Not_Recreate_Collaboration()
-        {
-            // Arrange
-            var collaboration = new CollaborationInfo
-            {
-                ConversationId = "5"
-            };
-            var fixture = new SendingProcessingMode
-            {
-                MessagePackaging =
-                {
-                    CollaborationInfo = collaboration
-                }
-            };
-
-            SendingProcessingMode result = ExercisePModeDecorationWithCompleteSmp(fixture);
-
-            // Assert
-            Assert.Same(collaboration, result.MessagePackaging.CollaborationInfo);
-            Assert.Equal(collaboration.ConversationId, result.MessagePackaging.CollaborationInfo.ConversationId);
-        }
-
-        private static SendingProcessingMode ExercisePModeDecorationWithCompleteSmp(SendingProcessingMode pmode)
-        {
-            return ExercisePModeDecorationWithSmp(XDocument.Parse(CompleteSMPResponse()), pmode);
-        }
-
-        private static SendingProcessingMode ExercisePModeDecorationWithSmp(XDocument smpResponse, SendingProcessingMode pmode)
-        {
-            var sut = new PeppolDynamicDiscoveryProfile();
-
-            var smpMetaData = new XmlDocument();
-            using (XmlReader reader = smpResponse.CreateReader())
-            {
-                smpMetaData.Load(reader);
-                return sut.DecoratePModeWithSmpMetaData(pmode, smpMetaData).CompletedSendingPMode;
+                CollaborationInfo = collaboration
             }
-        }
+        };
+
+        var result = ExercisePModeDecorationWithCompleteSmp(fixture);
+
+        // Assert
+        Assert.NotNull(result.MessagePackaging.CollaborationInfo);
+        Assert.Same(collaboration, result.MessagePackaging.CollaborationInfo);
+        Assert.Equal(collaboration.ConversationId, result.MessagePackaging.CollaborationInfo.ConversationId);
+    }
+
+    private static SendingProcessingMode ExercisePModeDecorationWithCompleteSmp(SendingProcessingMode pmode)
+    {
+        return ExercisePModeDecorationWithSmp(XDocument.Parse(CompleteSMPResponse()), pmode);
+    }
+
+    private static SendingProcessingMode ExercisePModeDecorationWithSmp(string smpResponse)
+    {
+        var sut = new PeppolDynamicDiscoveryProfile(NullLogger<PeppolDynamicDiscoveryProfile>.Instance);
+
+        var pmode = new SendingProcessingMode();
+        var smpMetaData = new XmlDocument();
+        smpMetaData.LoadXml(smpResponse);
+
+        return sut.DecoratePModeWithSmpMetaData(pmode, smpMetaData).CompletedSendingPMode;
+    }
+
+    private static SendingProcessingMode ExercisePModeDecorationWithSmp(XDocument smpResponse)
+    {
+        return ExercisePModeDecorationWithSmp(smpResponse, new SendingProcessingMode());
+    }
+
+    private static SendingProcessingMode ExercisePModeDecorationWithSmp(XDocument smpResponse, SendingProcessingMode pmode)
+    {
+        var sut = new PeppolDynamicDiscoveryProfile(NullLogger<PeppolDynamicDiscoveryProfile>.Instance);
+
+        var smpMetaData = new XmlDocument();
+        using var reader = smpResponse.CreateReader();
+        smpMetaData.Load(reader);
+        return sut.DecoratePModeWithSmpMetaData(pmode, smpMetaData).CompletedSendingPMode;
     }
 }

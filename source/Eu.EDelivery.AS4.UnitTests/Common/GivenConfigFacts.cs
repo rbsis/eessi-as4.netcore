@@ -1,61 +1,65 @@
-﻿using System;
-using System.IO;
-using Eu.EDelivery.AS4.Common;
-using Eu.EDelivery.AS4.Model.Internal;
+﻿using Eu.EDelivery.AS4.Model.Internal;
+using Eu.EDelivery.AS4.Model.PMode;
 using Eu.EDelivery.AS4.Serialization;
-using Xunit;
+using Eu.EDelivery.AS4.Watchers;
+using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
 
-namespace Eu.EDelivery.AS4.UnitTests.Common
+namespace Eu.EDelivery.AS4.UnitTests.Common;
+
+public class GivenConfigFacts
 {
-    public class GivenConfigFacts
+    [Fact]
+    public void InitializeWithDefaultRetryPollingInterval()
     {
-        [Fact]
-        public void Initialize_With_Default_Retry_Polling_Interval()
-        {
-            TestConfigInitialization(
-                alterSettings: settings =>
-                    settings.RetryReliability = new SettingsRetryReliability { PollingInterval = null },
-                onInitialized: config =>
-                    Assert.Equal(
-                        TimeSpan.FromSeconds(5), 
-                        config.RetryPollingInterval));
-        }
+        TestConfigInitialization(
+            alterSettings: settings =>
+                settings.RetryReliability = new SettingsRetryReliability { PollingInterval = null },
+            onInitialized: config =>
+                Assert.Equal(
+                    TimeSpan.FromSeconds(5),
+                    config.RetryPollingInterval));
+    }
 
-        private static void TestConfigInitialization(
-            Action<Settings> alterSettings,
-            Action<Config> onInitialized)
-        {
-            string testSettingsFileName = Path.Combine(
-                Config.ApplicationPath, "config", "test-settings.xml");
+    private static void TestConfigInitialization(
+        Action<Settings> alterSettings,
+        Action<AS4.Common.Config> onInitialized)
+    {
+        var testSettingsFileName = Path.Combine(
+            AS4.Common.Config.ApplicationPath, "config", "test-settings.xml");
 
-            string originalSettingsFileName = Path.Combine(
-                Config.ApplicationPath, "config", "settings.xml");
+        var originalSettingsFileName = Path.Combine(
+            AS4.Common.Config.ApplicationPath, "config", "settings.xml");
 
-            var settings = AS4XmlSerializer
-                .FromString<Settings>(File.ReadAllText(originalSettingsFileName));
+        var settings = AS4XmlSerializer
+            .FromString<Settings>(File.ReadAllText(originalSettingsFileName));
 
-            alterSettings(settings);
+        alterSettings(settings!);
 
-            File.WriteAllText(
-                testSettingsFileName,
-                AS4XmlSerializer.ToString(settings));
+        File.WriteAllText(
+            testSettingsFileName,
+            AS4XmlSerializer.ToString(settings));
 
-            File.Copy(
-                originalSettingsFileName,
-                testSettingsFileName,
-                overwrite: true);
+        File.Copy(
+            originalSettingsFileName,
+            testSettingsFileName,
+            overwrite: true);
 
-            Directory.CreateDirectory(Path.Combine(Config.ApplicationPath, "config", "send-pmodes"));
-            Directory.CreateDirectory(Path.Combine(Config.ApplicationPath, "config", "receive-pmodes"));
+        Directory.CreateDirectory(Path.Combine(AS4.Common.Config.ApplicationPath, "config", "send-pmodes"));
+        Directory.CreateDirectory(Path.Combine(AS4.Common.Config.ApplicationPath, "config", "receive-pmodes"));
 
-            // Act
-            Config.Instance.Initialize(testSettingsFileName);
+        var sut = new AS4.Common.Config(
+            NullLogger<AS4.Common.Config>.Instance,
+            Substitute.For<IPModeWatcher<ReceivingProcessingMode>>(),
+            Substitute.For<IPModeWatcher<SendingProcessingMode>>());
 
-            // Assert
-            onInitialized(Config.Instance);
+        // Act
+        sut.Initialize(testSettingsFileName);
 
-            // TearDown
-            File.Delete(testSettingsFileName);
-        }
+        // Assert
+        onInitialized(sut);
+
+        // TearDown
+        File.Delete(testSettingsFileName);
     }
 }

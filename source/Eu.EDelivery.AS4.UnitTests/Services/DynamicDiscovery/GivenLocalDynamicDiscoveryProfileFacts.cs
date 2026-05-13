@@ -1,171 +1,181 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using System.Xml;
-using Eu.EDelivery.AS4.Common;
+﻿using System.Xml;
 using Eu.EDelivery.AS4.Entities;
 using Eu.EDelivery.AS4.Model.PMode;
 using Eu.EDelivery.AS4.Serialization;
 using Eu.EDelivery.AS4.Services.DynamicDiscovery;
 using Eu.EDelivery.AS4.UnitTests.Common;
-using FsCheck.Xunit;
-using Xunit;
+using Microsoft.Extensions.Logging.Abstractions;
 using Party = Eu.EDelivery.AS4.Model.Core.Party;
 using PartyId = Eu.EDelivery.AS4.Model.Core.PartyId;
 
-namespace Eu.EDelivery.AS4.UnitTests.Services.DynamicDiscovery
+namespace Eu.EDelivery.AS4.UnitTests.Services.DynamicDiscovery;
+
+public class GivenLocalDynamicDiscoveryProfileFacts : GivenDatastoreFacts
 {
-    public class GivenLocalDynamicDiscoveryProfileFacts : GivenDatastoreFacts
+    [Fact]
+    public async Task RetrieveSmpResponseFromDatastore()
     {
-        [Fact]
-        public async Task RetrieveSmpResponseFromDatastore()
+        // Arrange
+        var fixture = new Party("role", new PartyId(Guid.NewGuid().ToString(), "type"));
+        var expected = new SmpConfiguration
         {
-            // Arrange
-            var fixture = new Party("role", new PartyId(Guid.NewGuid().ToString(), "type"));
-            var expected = new SmpConfiguration
-            {
-                PartyRole = fixture.Role,
-                ToPartyId = fixture.PrimaryPartyId,
-                PartyType = "type"
-            };
+            PartyRole = fixture.Role,
+            ToPartyId = fixture.PrimaryPartyId,
+            PartyType = "type"
+        };
 
-            InsertSmpResponse(expected);
+        InsertSmpResponse(expected);
 
-            var sut = new LocalDynamicDiscoveryProfile(GetDataStoreContext);
+        var sut = new LocalDynamicDiscoveryProfile(NullLogger<LocalDynamicDiscoveryProfile>.Instance, Default.NewDatastoreRepository(this));
 
-            // Act
-            XmlDocument actualDoc = await sut.RetrieveSmpMetaDataAsync(fixture, properties: null);
+        // Act
+        var actualDoc = await sut.RetrieveSmpMetaDataAsync(fixture, new Dictionary<string, string>(), CancellationToken.None);
 
-            // Assert
-            var actual = AS4XmlSerializer.FromString<SmpConfiguration>(actualDoc.OuterXml);
-            Assert.Equal(expected.ToPartyId, actual.ToPartyId);
-        }
+        // Assert
+        var actual = await AS4XmlSerializer.FromStringAsync<SmpConfiguration>(actualDoc.OuterXml, CancellationToken.None);
+        Assert.NotNull(actual);
+        Assert.Equal(expected.ToPartyId, actual.ToPartyId);
+    }
 
-        private void InsertSmpResponse(SmpConfiguration smpConfiguration)
+    private void InsertSmpResponse(SmpConfiguration smpConfiguration)
+    {
+        using var context = GetDataStoreContext();
+        context.SmpConfigurations.Add(smpConfiguration);
+        context.SaveChanges();
+    }
+
+    [Fact]
+    public void DecorateMandatoryInfoToSendingPMode()
+    {
+        // Arrange
+        var smpResponse = new SmpConfiguration
         {
-            using (DatastoreContext context = GetDataStoreContext())
+            PartyRole = "role",
+            ToPartyId = Guid.NewGuid().ToString(),
+            PartyType = "type",
+            Url = "http://some/url"
+        };
+
+        var doc = new XmlDocument();
+        doc.LoadXml(AS4XmlSerializer.ToString(smpResponse));
+
+        var pmode = new SendingProcessingMode();
+        var sut = new LocalDynamicDiscoveryProfile(NullLogger<LocalDynamicDiscoveryProfile>.Instance, Default.NewDatastoreRepository(this));
+
+        // Act
+        var actual = sut.DecoratePModeWithSmpMetaData(pmode, doc).CompletedSendingPMode;
+
+        // Assert
+        Assert.NotNull(actual.PushConfiguration);
+        Assert.Equal(smpResponse.Url, actual.PushConfiguration.Protocol.Url);
+    }
+
+    [Fact]
+    public void DecorateButNotRecreatePushConfiguration()
+    {
+        // Arrange
+        var smpResponse = new SmpConfiguration
+        {
+            PartyRole = "role",
+            ToPartyId = Guid.NewGuid().ToString(),
+            PartyType = "type",
+            Url = "http://some/url"
+        };
+
+        var push = new PushConfiguration
+        {
+            TlsConfiguration = new TlsConfiguration
             {
-                context.SmpConfigurations.Add(smpConfiguration);
-                context.SaveChanges();
+                CertificateType = TlsCertificateChoiceType.PrivateKeyCertificate,
+                ClientCertificateInformation = new ClientCertificateReference()
             }
-        }
+        };
+        var fixture = new SendingProcessingMode { PushConfiguration = push };
 
-        [Fact]
-        public void DecorateMandatoryInfoToSendingPMode()
+        // Act
+        var result = ExerciseDecorate(fixture, smpResponse);
+
+        // Assert
+        Assert.NotNull(result.PushConfiguration);
+        Assert.Same(push, result.PushConfiguration);
+        Assert.Equal(smpResponse.Url, push.Protocol.Url);
+        Assert.Same(
+            push.TlsConfiguration.ClientCertificateInformation,
+            result.PushConfiguration.TlsConfiguration.ClientCertificateInformation);
+    }
+
+    [Fact]
+    public void DecorateNotRecreateCollaborationInfo()
+    {
+        // Arrange
+        var smpResponse = new SmpConfiguration
         {
-            // Arrange
-            var smpResponse = new SmpConfiguration
-            {
-                PartyRole = "role",
-                Url = "http://some/url"
-            };
-
-            var doc = new XmlDocument();
-            doc.LoadXml(AS4XmlSerializer.ToString(smpResponse));
-
-            var pmode = new SendingProcessingMode();
-            var sut = new LocalDynamicDiscoveryProfile(GetDataStoreContext);
-
-            // Act
-            SendingProcessingMode actual = sut.DecoratePModeWithSmpMetaData(pmode, doc).CompletedSendingPMode;
-
-            // Assert
-            Assert.Equal(smpResponse.Url, actual.PushConfiguration.Protocol.Url);
-        }
-
-        [Fact]
-        public void Decorate_But_Not_Recreate_PushConfiguration()
+            PartyRole = "role",
+            ToPartyId = Guid.NewGuid().ToString(),
+            PartyType = "type",
+            Url = "http://some/url"
+        };
+        var collaboration = new CollaborationInfo
         {
-            // Arrange
-            var smpResponse = new SmpConfiguration
+            AgreementReference = new AgreementReference
             {
-                Url = "http://some/url"
-            };
+                Value = "http://eu.europe.org/agreements"
+            }
+        };
 
-            var push = new PushConfiguration
-            {
-                TlsConfiguration = new TlsConfiguration
-                {
-                    CertificateType = TlsCertificateChoiceType.PrivateKeyCertificate,
-                    ClientCertificateInformation = new ClientCertificateReference()
-                }
-            };
-            var fixture = new SendingProcessingMode { PushConfiguration = push };
-
-            // Act
-            SendingProcessingMode result = ExerciseDecorate(fixture, smpResponse);
-
-            // Assert
-            Assert.Same(push, result.PushConfiguration);
-            Assert.Equal(smpResponse.Url, push.Protocol.Url);
-            Assert.Same(
-                push.TlsConfiguration.ClientCertificateInformation,
-                result.PushConfiguration.TlsConfiguration.ClientCertificateInformation);
-        }
-
-        [Fact]
-        public void Decorate_Not_Recreate_CollaborationInfo()
+        var fixture = new SendingProcessingMode
         {
-            // Arrange
-            var smpResponse = new SmpConfiguration();
-            var collaboration = new CollaborationInfo
+            MessagePackaging = new SendMessagePackaging
             {
-                AgreementReference = new AgreementReference
-                {
-                    Value = "http://eu.europe.org/agreements"
-                }
-            };
+                CollaborationInfo = collaboration
+            }
+        };
 
-            var fixture = new SendingProcessingMode
-            {
-                MessagePackaging = new SendMessagePackaging
-                {
-                    CollaborationInfo = collaboration
-                }
-            };
+        // Act
+        var result = ExerciseDecorate(fixture, smpResponse);
 
-            // Act
-            SendingProcessingMode result = ExerciseDecorate(fixture, smpResponse);
+        // Assert
+        Assert.NotNull(result.MessagePackaging.CollaborationInfo);
+        Assert.Same(collaboration, result.MessagePackaging.CollaborationInfo);
+        Assert.Equal(
+            collaboration.AgreementReference.Value,
+            result.MessagePackaging.CollaborationInfo.AgreementReference.Value);
+    }
 
-            // Assert
-            Assert.Same(collaboration, result.MessagePackaging.CollaborationInfo);
-            Assert.Equal(
-                collaboration.AgreementReference.Value,
-                result.MessagePackaging.CollaborationInfo.AgreementReference.Value);
-        }
-
-        [Fact]
-        public void Dont_Touch_Signing_During_Decoration()
+    [Fact]
+    public void DontTouchSigningDuringDecoration()
+    {
+        // Arrange
+        var smpResponse = new SmpConfiguration
         {
-            // Arrange
-            var smpResponse = new SmpConfiguration
-            {
-                EncryptionEnabled = true
-            };
-            var fixture = new SendingProcessingMode
-            {
-                Security =
-                {
-                    Signing = { IsEnabled = true }
-                }
-            };
-
-            // Act
-            SendingProcessingMode result = ExerciseDecorate(fixture, smpResponse);
-
-            // Assert
-            Assert.Same(fixture.Security.Signing, result.Security.Signing);
-            Assert.True(result.Security.Signing.IsEnabled);
-        }
-
-        private SendingProcessingMode ExerciseDecorate(SendingProcessingMode pmode, SmpConfiguration smpResponse)
+            PartyRole = "role",
+            ToPartyId = Guid.NewGuid().ToString(),
+            PartyType = "type",
+            Url = "http://some/url",
+            EncryptionEnabled = true
+        };
+        var fixture = new SendingProcessingMode
         {
-            var doc = new XmlDocument();
-            doc.LoadXml(AS4XmlSerializer.ToString(smpResponse));
+            Security =
+            {
+                Signing = { IsEnabled = true }
+            }
+        };
 
-            var sut = new LocalDynamicDiscoveryProfile(GetDataStoreContext);
-            return sut.DecoratePModeWithSmpMetaData(pmode, doc).CompletedSendingPMode;
-        }
+        // Act
+        var result = ExerciseDecorate(fixture, smpResponse);
+
+        // Assert
+        Assert.Same(fixture.Security.Signing, result.Security.Signing);
+        Assert.True(result.Security.Signing.IsEnabled);
+    }
+
+    private SendingProcessingMode ExerciseDecorate(SendingProcessingMode pmode, SmpConfiguration smpResponse)
+    {
+        var doc = new XmlDocument();
+        doc.LoadXml(AS4XmlSerializer.ToString(smpResponse));
+
+        var sut = new LocalDynamicDiscoveryProfile(NullLogger<LocalDynamicDiscoveryProfile>.Instance, Default.NewDatastoreRepository(this));
+        return sut.DecoratePModeWithSmpMetaData(pmode, doc).CompletedSendingPMode;
     }
 }

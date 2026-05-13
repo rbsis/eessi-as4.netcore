@@ -1,16 +1,13 @@
-﻿using System;
-using Eu.EDelivery.AS4.Entities;
+﻿using Eu.EDelivery.AS4.Entities;
 using Eu.EDelivery.AS4.Extensions;
-using Xunit;
 
-namespace Eu.EDelivery.AS4.UnitTests.Entities
+namespace Eu.EDelivery.AS4.UnitTests.Entities;
+
+public class GivenInMessageEntityFacts
 {
-    public class GivenInMessageEntityFacts
+    [Fact]
+    public void InMessageHasDefaultInStatus()
     {
-        [Fact]
-        public void InMessageHasDefaultInStatus()
-        {
-            Assert.Equal(default(InStatus), new InMessage(Guid.NewGuid().ToString()).Status.ToEnum<InStatus>());
-        }
+        Assert.Equal(default, new InMessage(Guid.NewGuid().ToString()).Status.ToEnum<InStatus>());
     }
 }

@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using Eu.EDelivery.AS4.Factories;
+﻿using Eu.EDelivery.AS4.Factories;
 using Eu.EDelivery.AS4.Mappings.PMode;
 using Eu.EDelivery.AS4.Model.Common;
 using Eu.EDelivery.AS4.Model.Core;
@@ -14,297 +10,290 @@ using MessageProperty = Eu.EDelivery.AS4.Model.Core.MessageProperty;
 using Party = Eu.EDelivery.AS4.Model.Core.Party;
 using PartyId = Eu.EDelivery.AS4.Model.Core.PartyId;
 using Service = Eu.EDelivery.AS4.Model.Core.Service;
+using static Eu.EDelivery.AS4.Constants.Namespaces;
 
-namespace Eu.EDelivery.AS4.Mappings.Submit
+namespace Eu.EDelivery.AS4.Mappings.Submit;
+
+/// <summary>
+/// Collection of mapping functions to create ebMS models from Submit models,
+/// optionally forwarding calls to mapping from <see cref="Model.PMode.SendingProcessingMode"/> models.
+/// </summary>
+public class SubmitMessageMap : ISubmitMessageMap
 {
-    /// <summary>
-    /// Collection of mapping functions to create ebMS models from Submit models,
-    /// optionally forwarding calls to mapping from <see cref="Model.PMode.SendingProcessingMode"/> models.
-    /// </summary>
-    internal static class SubmitMessageMap
+    private readonly IIdentifierFactory _identifierFactory;
+    private readonly ISendingPModeMap _sendingPModeMap;
+
+    public SubmitMessageMap(IIdentifierFactory identifierFactory, ISendingPModeMap sendingPModeMap)
     {
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="submit"></param>
-        /// <param name="sendingPMode"></param>
-        /// <returns></returns>
-        internal static UserMessage CreateUserMessage(SubmitMessage submit, SendingProcessingMode sendingPMode)
+        _identifierFactory = identifierFactory;
+        _sendingPModeMap = sendingPModeMap;
+    }
+
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="submit"></param>
+    /// <param name="sendingPMode"></param>
+    /// <returns></returns>
+    public UserMessage CreateUserMessage(SubmitMessage submit, SendingProcessingMode? sendingPMode)
+    {
+        var collaboration = new CollaborationInfo(
+            ResolveAgreement(submit, sendingPMode),
+            ResolveService(submit, sendingPMode),
+            ResolveAction(submit, sendingPMode),
+            ResolveConversationId(submit));
+
+        return new UserMessage(
+            messageId: submit.MessageInfo.MessageId ?? _identifierFactory.Create(),
+            refToMessageId: submit.MessageInfo.RefToMessageId,
+            timestamp: DateTimeOffset.Now,
+            mpc: ResolveMpc(submit, sendingPMode),
+            collaboration: collaboration,
+            sender: ResolveSenderParty(submit, sendingPMode),
+            receiver: ResolveReceiverParty(submit, sendingPMode),
+            partInfos: ResolvePartInfos(submit, sendingPMode).ToArray(),
+            messageProperties: [.. ResolveMessageProperties(submit, sendingPMode)]);
+    }
+
+    private string ResolveAction(SubmitMessage submit, SendingProcessingMode? sendingPMode)
+    {
+        var submitAction = submit.Collaboration.Action;
+        var pmodeAction = sendingPMode?.MessagePackaging?.CollaborationInfo?.Action;
+
+        if (sendingPMode?.AllowOverride == false
+            && !string.IsNullOrEmpty(submitAction)
+            && !string.IsNullOrEmpty(pmodeAction)
+            && !StringComparer.OrdinalIgnoreCase.Equals(submitAction, pmodeAction))
         {
-            if (submit == null)
-            {
-                throw new ArgumentNullException(nameof(submit));
-            }
-
-            if (sendingPMode == null)
-            {
-                throw new ArgumentNullException(nameof(sendingPMode));
-            }
-
-            var collaboration = new CollaborationInfo(
-                ResolveAgreement(submit, sendingPMode),
-                ResolveService(submit, sendingPMode),
-                ResolveAction(submit, sendingPMode),
-                ResolveConversationId(submit));
-
-            return new UserMessage(
-                messageId: submit.MessageInfo?.MessageId ?? IdentifierFactory.Instance.Create(),
-                refToMessageId: submit.MessageInfo?.RefToMessageId,
-                timestamp: DateTimeOffset.Now,
-                mpc: ResolveMpc(submit, sendingPMode),
-                collaboration: collaboration,
-                sender: ResolveSenderParty(submit, sendingPMode),
-                receiver: ResolveReceiverParty(submit, sendingPMode),
-                partInfos: ResolvePartInfos(submit, sendingPMode).ToArray(),
-                messageProperties: ResolveMessageProperties(submit, sendingPMode).ToArray());
+            throw new NotSupportedException(
+                $"SubmitMessage is not allowed by SendingPMode {sendingPMode.Id} to override Action");
         }
 
-        private static string ResolveAction(SubmitMessage submit, SendingProcessingMode sendingPMode)
+        if (!string.IsNullOrEmpty(submitAction))
         {
-            string submitAction = submit?.Collaboration?.Action;
-            string pmodeAction = sendingPMode?.MessagePackaging?.CollaborationInfo?.Action;
-
-            if (sendingPMode?.AllowOverride == false
-                && !String.IsNullOrEmpty(submitAction)
-                && !String.IsNullOrEmpty(pmodeAction)
-                && !StringComparer.OrdinalIgnoreCase.Equals(submitAction, pmodeAction))
-            {
-                throw new NotSupportedException(
-                    $"SubmitMessage is not allowed by SendingPMode {sendingPMode.Id} to override Action");
-            }
-
-            if (!String.IsNullOrEmpty(submitAction))
-            {
-                return submit.Collaboration.Action;
-            }
-
-            return SendingPModeMap.ResolveAction(sendingPMode);
+            return submitAction;
         }
 
-        private static string ResolveConversationId(SubmitMessage submit)
+        return _sendingPModeMap.ResolveAction(sendingPMode);
+    }
+
+    private static string ResolveConversationId(SubmitMessage submit)
+    {
+        var submitConversationId = submit?.Collaboration?.ConversationId;
+        return string.IsNullOrEmpty(submitConversationId)
+            ? CollaborationInfo.DefaultConversationId
+            : submitConversationId;
+    }
+
+    private static Maybe<AgreementReference> ResolveAgreement(SubmitMessage submit, SendingProcessingMode? sendingPMode)
+    {
+        var pmodeAgreement = sendingPMode?.MessagePackaging?.CollaborationInfo?.AgreementReference;
+        var submitAgreement = submit?.Collaboration?.AgreementRef;
+
+        var includePModeId = sendingPMode?.MessagePackaging?.IncludePModeId == true;
+
+        if (sendingPMode?.AllowOverride == false
+            && !string.IsNullOrEmpty(submitAgreement?.Value)
+            && !string.IsNullOrEmpty(pmodeAgreement?.Value)
+            && !StringComparer.OrdinalIgnoreCase.Equals(pmodeAgreement.Value, submitAgreement.Value))
         {
-            string submitConversationId = submit?.Collaboration?.ConversationId;
-            return String.IsNullOrEmpty(submitConversationId)
-                ? CollaborationInfo.DefaultConversationId
-                : submitConversationId;
+            throw new NotSupportedException(
+                $"SubmitMessage is not allowed by the Sending PMode {sendingPMode.Id} to override AgreementReference.Value");
         }
 
-        private static Maybe<AgreementReference> ResolveAgreement(SubmitMessage submit, SendingProcessingMode sendingPMode)
+        if (!string.IsNullOrEmpty(submitAgreement?.Value))
         {
-            var pmodeAgreement = sendingPMode?.MessagePackaging?.CollaborationInfo?.AgreementReference;
-            var submitAgreement = submit?.Collaboration?.AgreementRef;
-
-            bool includePModeId = sendingPMode?.MessagePackaging?.IncludePModeId == true;
-
-            if (sendingPMode?.AllowOverride == false
-                && !String.IsNullOrEmpty(submitAgreement?.Value)
-                && !String.IsNullOrEmpty(pmodeAgreement?.Value)
-                && !StringComparer.OrdinalIgnoreCase.Equals(pmodeAgreement.Value, submitAgreement.Value))
-            {
-                throw new NotSupportedException(
-                    $"SubmitMessage is not allowed by the Sending PMode {sendingPMode.Id} to override AgreementReference.Value");
-            }
-
-            if (!String.IsNullOrEmpty(submitAgreement?.Value))
-            {
-                return Maybe.Just(
-                    new AgreementReference(
-                        submitAgreement.Value,
-                        submitAgreement.RefType,
-                        includePModeId ? sendingPMode.Id : null));
-            }
-
-            if (!String.IsNullOrEmpty(pmodeAgreement?.Value))
-            {
-                return Maybe.Just(
-                    new AgreementReference(
-                        pmodeAgreement.Value,
-                        pmodeAgreement.Type,
-                        includePModeId ? sendingPMode.Id : null));
-            }
-
-            return Maybe<AgreementReference>.Nothing;
+            return Maybe.Just(
+                new AgreementReference(
+                    submitAgreement.Value,
+                    submitAgreement.RefType,
+                    includePModeId ? sendingPMode!.Id : null));
         }
 
-        private static Service ResolveService(SubmitMessage submit, SendingProcessingMode sendingPMode)
+        if (!string.IsNullOrEmpty(pmodeAgreement?.Value))
         {
-            var pmodeService = sendingPMode?.MessagePackaging?.CollaborationInfo?.Service;
-            var submitService = submit?.Collaboration?.Service;
-
-            if (sendingPMode?.AllowOverride == false
-                && !String.IsNullOrEmpty(submitService?.Value)
-                && !String.IsNullOrEmpty(pmodeService?.Value)
-                && !StringComparer.OrdinalIgnoreCase.Equals(submitService.Value, pmodeService.Value))
-            {
-                throw new NotSupportedException(
-                    $"SubmitMessage is not allowed by SendingPMode {sendingPMode.Id} to override CollaborationInfo.Service");
-            }
-
-            if (submitService?.Value != null)
-            {
-                return new Service(submitService.Value, submitService.Type);
-            }
-
-            return SendingPModeMap.ResolveService(sendingPMode);
+            return Maybe.Just(
+                new AgreementReference(
+                    pmodeAgreement.Value,
+                    pmodeAgreement.Type,
+                    includePModeId ? sendingPMode!.Id : null));
         }
 
-        private static IEnumerable<MessageProperty> ResolveMessageProperties(
-            SubmitMessage submit,
-            SendingProcessingMode sendingPMode)
+        return Maybe<AgreementReference>.Nothing;
+    }
+
+    private Service ResolveService(SubmitMessage submit, SendingProcessingMode? sendingPMode)
+    {
+        var pmodeService = sendingPMode?.MessagePackaging?.CollaborationInfo?.Service;
+        var submitService = submit?.Collaboration?.Service;
+
+        if (sendingPMode?.AllowOverride == false
+            && !string.IsNullOrEmpty(submitService?.Value)
+            && !string.IsNullOrEmpty(pmodeService?.Value)
+            && !StringComparer.OrdinalIgnoreCase.Equals(submitService.Value, pmodeService.Value))
         {
-            if (submit.MessageProperties != null)
+            throw new NotSupportedException(
+                $"SubmitMessage is not allowed by SendingPMode {sendingPMode.Id} to override CollaborationInfo.Service");
+        }
+
+        if (submitService?.Value != null)
+        {
+            return new Service(submitService.Value, submitService.Type);
+        }
+
+        return _sendingPModeMap.ResolveService(sendingPMode);
+    }
+
+    private static IEnumerable<MessageProperty> ResolveMessageProperties(SubmitMessage submit, SendingProcessingMode? sendingPMode)
+    {
+        if (submit.MessageProperties != null)
+        {
+            foreach (var p in submit.MessageProperties)
             {
-                foreach (Model.Common.MessageProperty p in submit.MessageProperties)
+                yield return new MessageProperty(p.Name, p.Value, p.Type);
+            }
+        }
+
+        if (sendingPMode?.MessagePackaging?.MessageProperties != null)
+        {
+            foreach (var p in sendingPMode.MessagePackaging.MessageProperties)
+            {
+                yield return new MessageProperty(p.Name, p.Value, p.Type);
+            }
+        }
+    }
+
+    private static string ResolveMpc(SubmitMessage submit, SendingProcessingMode? sendingPMode)
+    {
+        var pmodeMpc = sendingPMode?.MessagePackaging?.Mpc;
+        var submitMpc = submit?.MessageInfo?.Mpc;
+
+        if (sendingPMode?.AllowOverride == false
+            && !string.IsNullOrEmpty(submitMpc)
+            && !StringComparer.OrdinalIgnoreCase.Equals(Constants.Namespaces.EbmsDefaultMpc, submitMpc)
+            && !string.IsNullOrEmpty(pmodeMpc)
+            && !StringComparer.OrdinalIgnoreCase.Equals(submitMpc, pmodeMpc))
+        {
+            throw new NotSupportedException(
+                $"SubmitMessage is not allowed by SendingPMode {sendingPMode.Id} to override Mpc");
+        }
+
+        if (!string.IsNullOrEmpty(pmodeMpc))
+        {
+            return !string.IsNullOrEmpty(submitMpc)
+            ? submitMpc
+            : pmodeMpc;
+        }
+        else
+        {
+            return !string.IsNullOrEmpty(submitMpc)
+            ? submitMpc
+            : Constants.Namespaces.EbmsDefaultMpc;
+        }
+    }
+
+    private static Party ResolveReceiverParty(SubmitMessage submit, SendingProcessingMode? sendingPMode)
+    {
+        var pmodeParty = sendingPMode?.MessagePackaging?.PartyInfo?.ToParty;
+        var submitParty = submit?.PartyInfo?.ToParty;
+
+        if (sendingPMode?.AllowOverride == false
+            && submitParty != null
+            && pmodeParty != null
+            && !submitParty.Equals(pmodeParty))
+        {
+            throw new NotSupportedException(
+                $"SubmitMessage is not allowed by the SendingPMode {sendingPMode.Id} to override Receiver Party");
+        }
+
+        if (submitParty != null)
+        {
+            var ids = submitParty.PartyIds ?? Enumerable.Empty<Model.Common.PartyId>();
+            return new Party(submitParty.Role ?? EbmsDefaultRole, ids.Select(x => new PartyId(x.Id, x.Type)).ToArray());
+        }
+
+        return SendingPModeMap.ResolveReceiver(pmodeParty);
+    }
+
+    private static Party ResolveSenderParty(SubmitMessage submit, SendingProcessingMode? sendingPMode)
+    {
+        var pmodeParty = sendingPMode?.MessagePackaging?.PartyInfo?.FromParty;
+        var submitParty = submit?.PartyInfo?.FromParty;
+
+        if (sendingPMode?.AllowOverride == false
+            && submitParty != null
+            && pmodeParty != null
+            && !submitParty.Equals(pmodeParty))
+        {
+            throw new NotSupportedException(
+                $"SubmitMessage is not allowed by SendingPMode {sendingPMode.Id} to override Sender Party");
+        }
+
+        if (submitParty != null)
+        {
+            var ids = submitParty.PartyIds ?? Enumerable.Empty<Model.Common.PartyId>();
+            return new Party(submitParty.Role ?? EbmsDefaultRole, ids.Select(x => new PartyId(x.Id, x.Type)).ToArray());
+        }
+
+        return SendingPModeMap.ResolveSender(pmodeParty);
+    }
+
+    private IEnumerable<PartInfo> ResolvePartInfos(SubmitMessage submit, SendingProcessingMode? sendingPMode)
+    {
+        return (submit.Payloads)
+               .Where(p => p != null)
+               .Select(p => CreatePartInfo(p, sendingPMode))
+               .ToArray();
+    }
+
+    private PartInfo CreatePartInfo(Payload submitPayload, SendingProcessingMode? sendingPMode)
+    {
+        var id = submitPayload.Id ?? _identifierFactory.Create();
+        var href = id.StartsWith("cid:") ? id : $"cid:{id}";
+
+        IEnumerable<Model.Core.Schema> schemas =
+            (submitPayload.Schemas ?? [])
+            .Where(sch => sch != null)
+            .Select(sch =>
+            {
+                // TODO: should we throw or skip?
+                if (sch.Location == null)
                 {
-                    yield return new MessageProperty(p?.Name, p?.Value, p?.Type);
+                    throw new InvalidDataException(
+                        "SubmitMessage contains Payload with a Schema that hasn't got a Location");
                 }
-            }
 
-            if (sendingPMode.MessagePackaging?.MessageProperties != null)
-            {
-                foreach (Model.PMode.MessageProperty p in sendingPMode.MessagePackaging.MessageProperties)
-                {
-                    yield return new MessageProperty(p?.Name, p?.Value, p?.Type);
-                }
-            }
-        }
+                return new Model.Core.Schema(sch.Location, sch.Version, sch.Namespace);
+            })
+            .ToArray();
 
-        private static string ResolveMpc(SubmitMessage submit, SendingProcessingMode sendingPMode)
+        IDictionary<string, string> properties = (submitPayload.PayloadProperties ?? [])
+            .Where(p => p.Name != null && p.Value != null)
+            .Select(p => (p.Name!, p.Value!))
+            .Concat(CreatePayloadCompressionProperties(submitPayload, sendingPMode))
+            .ToDictionary<(string propName, string propValue), string, string>(
+                t => t.propName,
+                t => t.propValue,
+                StringComparer.OrdinalIgnoreCase);
+
+        return new PartInfo(href, properties, schemas);
+    }
+
+    private static IEnumerable<(string propName, string propValue)> CreatePayloadCompressionProperties(
+        Payload payload,
+        SendingProcessingMode? sendingPMode)
+    {
+        if ((sendingPMode?.MessagePackaging?.UseAS4Compression) != true)
         {
-            string pmodeMpc = sendingPMode?.MessagePackaging?.Mpc;
-            string submitMpc = submit?.MessageInfo?.Mpc;
-
-            if (sendingPMode?.AllowOverride == false
-                && !String.IsNullOrEmpty(submitMpc)
-                && !StringComparer.OrdinalIgnoreCase.Equals(Constants.Namespaces.EbmsDefaultMpc, submitMpc)
-                && !String.IsNullOrEmpty(pmodeMpc)
-                && !StringComparer.OrdinalIgnoreCase.Equals(submitMpc, pmodeMpc))
-            {
-                throw new NotSupportedException(
-                    $"SubmitMessage is not allowed by SendingPMode {sendingPMode.Id} to override Mpc");
-            }
-
-            return !String.IsNullOrEmpty(submitMpc)
-                ? submitMpc
-                : !String.IsNullOrEmpty(pmodeMpc)
-                    ? pmodeMpc
-                    : Constants.Namespaces.EbmsDefaultMpc;
+            return [];
         }
 
-        private static Party ResolveReceiverParty(SubmitMessage submit, SendingProcessingMode sendingPMode)
-        {
-            var pmodeParty = sendingPMode?.MessagePackaging?.PartyInfo?.ToParty;
-            var submitParty = submit?.PartyInfo?.ToParty;
-
-            if (sendingPMode?.AllowOverride == false
-                && submitParty != null
-                && pmodeParty != null
-                && !submitParty.Equals(pmodeParty))
-            {
-                throw new NotSupportedException(
-                    $"SubmitMessage is not allowed by the SendingPMode {sendingPMode.Id} to override Receiver Party");
-            }
-
-            if (submitParty != null)
-            {
-                var ids = submitParty.PartyIds ?? Enumerable.Empty<Model.Common.PartyId>();
-                return new Party(submitParty.Role, ids.Select(x => new PartyId(x.Id, x.Type)).ToArray());
-            }
-
-            return SendingPModeMap.ResolveReceiver(pmodeParty);
-        }
-
-        private static Party ResolveSenderParty(SubmitMessage submit, SendingProcessingMode sendingPMode)
-        {
-            var pmodeParty = sendingPMode?.MessagePackaging?.PartyInfo?.FromParty;
-            var submitParty = submit?.PartyInfo?.FromParty;
-
-            if (sendingPMode?.AllowOverride == false
-                && submitParty != null
-                && pmodeParty != null
-                && !submitParty.Equals(pmodeParty))
-            {
-                throw new NotSupportedException(
-                    $"SubmitMessage is not allowed by SendingPMode {sendingPMode.Id} to override Sender Party");
-            }
-
-            if (submitParty != null)
-            {
-                var ids = submitParty.PartyIds ?? Enumerable.Empty<Model.Common.PartyId>();
-                return new Party(submitParty.Role, ids.Select(x => new PartyId(x.Id, x.Type)).ToArray());
-            }
-
-            return SendingPModeMap.ResolveSender(pmodeParty);
-        }
-
-        private static IEnumerable<PartInfo> ResolvePartInfos(SubmitMessage submit, SendingProcessingMode sendingPMode)
-        {
-            return (submit?.Payloads ?? Enumerable.Empty<Payload>())
-                   .Where(p => p != null)
-                   .Select(p => CreatePartInfo(p, sendingPMode))
-                   .ToArray();
-        }
-
-        private static PartInfo CreatePartInfo(Payload submitPayload, SendingProcessingMode sendingPMode)
-        {
-            string id = submitPayload.Id ?? IdentifierFactory.Instance.Create();
-            string href = id.StartsWith("cid:") ? id : $"cid:{id}";
-
-            IEnumerable<Model.Core.Schema> schemas =
-                (submitPayload.Schemas ?? new Model.Common.Schema[0])
-                .Where(sch => sch != null)
-                .Select(sch =>
-                {
-                    // TODO: should we throw or skip?
-                    if (sch.Location == null)
-                    {
-                        throw new InvalidDataException(
-                            "SubmitMessage contains Payload with a Schema that hasn't got a Location");
-                    }
-
-                    return new Model.Core.Schema(sch.Location, sch.Version, sch.Namespace);
-                })
-                .ToArray();
-
-            IDictionary<string, string> properties =
-                (submitPayload.PayloadProperties ?? new PayloadProperty[0])
-                .Where(p => p != null)
-                .Select(prop =>
-                {
-                    // TODO: should we throw or skip?
-                    if (prop.Name == null)
-                    {
-                        throw new InvalidDataException(
-                            "SubmitMessage contains Payload with a PayloadProperty that hasn't got a Name");
-                    }
-
-                    return (prop.Name, prop.Value);
-                })
-                .Concat(CreatePayloadCompressionProperties(submitPayload, sendingPMode))
-                .ToDictionary<(string propName, string propValue), string, string>(
-                    t => t.propName,
-                    t => t.propValue,
-                    StringComparer.OrdinalIgnoreCase);
-
-            return new PartInfo(href, properties, schemas);
-        }
-
-        private static IEnumerable<(string propName, string propValue)> CreatePayloadCompressionProperties(
-            Payload payload,
-            SendingProcessingMode sendingPMode)
-        {
-            if (sendingPMode.MessagePackaging?.UseAS4Compression == true)
-            {
-                return new[]
-                {
-                    ("CompressionType", "application/gzip"),
-                    ("MimeType", !String.IsNullOrEmpty(payload.MimeType)
-                        ? payload.MimeType
-                        : "application/octet-stream")
-                };
-            }
-
-            return Enumerable.Empty<(string, string)>();
-        }
+        return
+        [
+            ("CompressionType", "application/gzip"),
+            ("MimeType", !string.IsNullOrEmpty(payload.MimeType)
+                ? payload.MimeType
+                : "application/octet-stream")
+        ];
     }
 }

@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Security.Cryptography.Xml;
 using System.Xml;
@@ -10,308 +6,286 @@ using Eu.EDelivery.AS4.Model.Core;
 using Eu.EDelivery.AS4.Security.Encryption;
 using Eu.EDelivery.AS4.Security.Factories;
 using Eu.EDelivery.AS4.Security.Serializers;
-using Eu.EDelivery.AS4.Streaming;
 using MimeKit;
-using log4net;
-using Org.BouncyCastle.Crypto;
-using Org.BouncyCastle.Crypto.Encodings;
 using Org.BouncyCastle.Security;
 
-namespace Eu.EDelivery.AS4.Security.Strategies
+namespace Eu.EDelivery.AS4.Security.Strategies;
+
+internal class DecryptionStrategy : CryptoStrategy
 {
-    internal class DecryptionStrategy : CryptoStrategy
+    private readonly XmlDocument _soapEnvelope;
+    private readonly IEnumerable<Attachment> _attachments;
+    private readonly X509Certificate2 _certificate;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DecryptionStrategy"/> class.
+    /// </summary>
+    internal DecryptionStrategy(
+        XmlDocument envelopeDocument,
+        IEnumerable<Attachment> attachments,
+        X509Certificate2 certificate)
     {
-        private readonly XmlDocument _soapEnvelope;
-        private readonly IEnumerable<Attachment> _attachments;
-        private readonly X509Certificate2 _certificate;
+        _soapEnvelope = envelopeDocument;
+        _attachments = attachments;
+        _certificate = certificate;
+    }
 
-        private static readonly ILog Logger = LogManager.GetLogger( System.Reflection.MethodBase.GetCurrentMethod().DeclaringType );
+    /// <summary>
+    /// Decrypts the <see cref="AS4Message"/>, replacing the encrypted content with the decrypted content.
+    /// </summary>
+    public void DecryptMessage()
+    {
+        var encryptedDatas =
+            new EncryptedDataSerializer(_soapEnvelope).SerializeEncryptedDatas();
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="DecryptionStrategy"/> class.
-        /// </summary>
-        internal DecryptionStrategy(XmlDocument envelopeDocument, IEnumerable<Attachment> attachments, X509Certificate2 certificate)
+        var as4EncryptedKey = AS4EncryptedKey.LoadFromXmlDocument(_soapEnvelope);
+
+        var key = DecryptEncryptedKey(as4EncryptedKey, _certificate);
+
+        foreach (var encryptedData in encryptedDatas)
         {
-            _soapEnvelope = envelopeDocument;
-            _attachments = attachments;
-            _certificate = certificate;
+            DecryptEncryptedData(encryptedData, key);
+        }
+    }
+
+    private static byte[] DecryptEncryptedKey(AS4EncryptedKey encryptedKey, X509Certificate2 certificate)
+    {
+        var encoding = EncodingFactory.Create(encryptedKey.GetDigestAlgorithm(), encryptedKey.GetMaskGenerationFunction());
+
+        // We do not look at the KeyInfo element in here, but rather decrypt it with the certificate provided as argument.
+        // Call GetRSAPrivateKey to avoid KeySet does not exist exceptions that might be thrown.
+        var privateKey = certificate.GetRSAPrivateKey() ?? throw new CryptographicException("The decryption certificate does not contain a private key.");
+        var encryptionCertificateKeyPair =
+            DotNetUtilities.GetRsaKeyPair(privateKey);
+
+        encoding.Init(false, encryptionCertificateKeyPair.Private);
+
+        var cipherData = encryptedKey.GetCipherData();
+        return encoding.ProcessBlock(
+            inBytes: cipherData.CipherValue, inOff: 0, inLen: cipherData.CipherValue?.Length ?? 0);
+    }
+
+    private void DecryptEncryptedData(EncryptedData encryptedData, byte[] key)
+    {
+        if (encryptedData.EncryptionMethod?.KeyAlgorithm is null)
+        {
+            throw new CryptographicException("KeyAlgorithm is null");
+        }
+        using var decryptAlgorithm = CreateSymmetricAlgorithm(encryptedData.EncryptionMethod.KeyAlgorithm, key);
+        DecryptAttachment(encryptedData, decryptAlgorithm);
+    }
+
+    private void DecryptAttachment(EncryptedData encryptedData, SymmetricAlgorithm decryptAlgorithm)
+    {
+        ArgumentNullException.ThrowIfNull(encryptedData.Type);
+        ArgumentNullException.ThrowIfNull(encryptedData.MimeType);
+
+        if (_attachments == null)
+        {
+            return;
         }
 
-        /// <summary>
-        /// Decrypts the <see cref="AS4Message"/>, replacing the encrypted content with the decrypted content.
-        /// </summary>
-        public void DecryptMessage()
+        var uri = encryptedData.CipherData.CipherReference?.Uri;
+        var attachment = _attachments.SingleOrDefault(x => string.Equals(x.Id, uri?[4..]))
+            ?? throw new CryptographicException($"Attachment {uri?[4..]} cannot be found and can therefore not be decrypted");
+
+        var decryptedStream = DecryptData(encryptedData, attachment.Content, decryptAlgorithm);
+
+        var transformer = AttachmentTransformer.Create(encryptedData.Type);
+        transformer.Transform(attachment, decryptedStream, encryptedData.MimeType);
+    }
+
+    private Stream DecryptData(EncryptedData encryptedData, Stream encryptedTextStream, SymmetricAlgorithm encryptionAlgorithm)
+    {
+        var decryptedStream = CreateVirtualStreamOf(encryptedTextStream);
+
+        // save the original symmetric algorithm
+        var origMode = encryptionAlgorithm.Mode;
+        var origPadding = encryptionAlgorithm.Padding;
+        var origIV = encryptionAlgorithm.IV;
+
+        // read the IV from cipherValue
+        byte[]? decryptionIV = null;
+        if (Mode != CipherMode.ECB)
         {
-            IEnumerable<EncryptedData> encryptedDatas =
-                new EncryptedDataSerializer(_soapEnvelope).SerializeEncryptedDatas();
-
-            var as4EncryptedKey = AS4EncryptedKey.LoadFromXmlDocument(_soapEnvelope);
-
-            byte[] key = DecryptEncryptedKey(as4EncryptedKey, _certificate);
-
-            foreach (EncryptedData encryptedData in encryptedDatas)
-            {
-                DecryptEncryptedData(encryptedData, key);
-            }
+            decryptionIV = GetDecryptionIV(encryptedData, encryptedTextStream, null);
         }
 
-        private static byte[] DecryptEncryptedKey(AS4EncryptedKey encryptedKey, X509Certificate2 certificate)
+        if (decryptionIV != null)
         {
-            OaepEncoding encoding = EncodingFactory.Instance
-                                                   .Create(encryptedKey.GetDigestAlgorithm(), encryptedKey.GetMaskGenerationFunction());
-
-            // We do not look at the KeyInfo element in here, but rather decrypt it with the certificate provided as argument.
-            // Call GetRSAPrivateKey to avoid KeySet does not exist exceptions that might be thrown.
-            RSA privateKey = certificate.GetRSAPrivateKey();
-
-            if (privateKey == null)
-            {
-                throw new CryptographicException("The decryption certificate does not contain a private key.");
-            }
-
-            AsymmetricCipherKeyPair encryptionCertificateKeyPair =
-                DotNetUtilities.GetRsaKeyPair(privateKey);
-
-            encoding.Init(false, encryptionCertificateKeyPair.Private);
-
-            CipherData cipherData = encryptedKey.GetCipherData();
-            return encoding.ProcessBlock(
-                inBytes: cipherData.CipherValue, inOff: 0, inLen: cipherData.CipherValue.Length);
+            encryptionAlgorithm.IV = decryptionIV;
         }
 
-        private void DecryptEncryptedData(EncryptedData encryptedData, byte[] key)
+        var cryptoStream = new CryptoStream(encryptedTextStream, encryptionAlgorithm.CreateDecryptor(), CryptoStreamMode.Read);
+
+        try
         {
-            using (SymmetricAlgorithm decryptAlgorithm =
-                CreateSymmetricAlgorithm(encryptedData.EncryptionMethod.KeyAlgorithm, key))
+            encryptionAlgorithm.Mode = Mode;
+            encryptionAlgorithm.Padding = Padding;
+            cryptoStream.CopyTo(decryptedStream);
+        }
+        finally
+        {
+            if (!cryptoStream.HasFlushedFinalBlock)
             {
-                DecryptAttachment(encryptedData, decryptAlgorithm);
+                cryptoStream.FlushFinalBlock();
             }
+
+            // now restore the original symmetric algorithm
+            encryptionAlgorithm.Mode = origMode;
+            encryptionAlgorithm.Padding = origPadding;
+            encryptionAlgorithm.IV = origIV;
         }
 
-        private void DecryptAttachment(EncryptedData encryptedData, SymmetricAlgorithm decryptAlgorithm)
+        decryptedStream.Position = 0;
+
+        return decryptedStream;
+    }
+
+    /// <summary>
+    /// Retrieves the decryption initialization vector (IV) from an EncryptedData  object.
+    /// </summary>
+    /// <returns>A byte array that contains the decryption initialization vector (IV).</returns>
+    /// <param name="encryptedData"></param>
+    /// <param name="symmetricAlgorithmUri"></param>        
+    public override byte[] GetDecryptionIV(EncryptedData encryptedData, string? symmetricAlgorithmUri)
+    {
+        if (encryptedData.CipherData.CipherValue == null)
         {
-            if (_attachments == null)
+            throw new CryptographicException("Missing CipherValue");
+        }
+
+        if (symmetricAlgorithmUri == null)
+        {
+            if (encryptedData.EncryptionMethod?.KeyAlgorithm == null)
             {
-                return;
+                throw new CryptographicException("Missing encryption algorithm");
             }
 
-            string uri = encryptedData.CipherData.CipherReference.Uri;
-            Attachment attachment = _attachments.SingleOrDefault(x => string.Equals(x.Id, uri.Substring(4)));
-            if (attachment != null)
-            {
-                Stream decryptedStream = DecryptData(encryptedData, attachment.Content, decryptAlgorithm);
+            symmetricAlgorithmUri = encryptedData.EncryptionMethod.KeyAlgorithm;
+        }
 
-                var transformer = AttachmentTransformer.Create(encryptedData.Type);
-                transformer.Transform(attachment, decryptedStream, encryptedData.MimeType);
+        var vectorLength = GetIVLength(symmetricAlgorithmUri);
+        var iv = new byte[vectorLength];
+
+        Buffer.BlockCopy(encryptedData.CipherData.CipherValue, srcOffset: 0, dst: iv, dstOffset: 0, count: iv.Length);
+
+        return iv;
+    }
+
+    private static byte[] GetDecryptionIV(EncryptedData encryptedData, Stream encryptedTextStream, string? symmetricAlgorithmUri)
+    {
+        ArgumentNullException.ThrowIfNull(encryptedData);
+
+        if (symmetricAlgorithmUri == null)
+        {
+            if (encryptedData.EncryptionMethod == null)
+            {
+                throw new CryptographicException("Missing encryption algorithm");
+            }
+
+            symmetricAlgorithmUri = encryptedData.EncryptionMethod.KeyAlgorithm;
+        }
+
+        var vectorLength = GetIVLength(symmetricAlgorithmUri!);
+        var iv = new byte[vectorLength];
+
+        _ = encryptedTextStream.Read(iv, 0, iv.Length);
+
+        return iv;
+    }
+
+    private static int GetIVLength(string symmetricAlgorithmUri)
+    {
+        int vectorLength;
+        if (symmetricAlgorithmUri == "http://www.w3.org/2009/xmlenc11#aes128-gcm")
+        {
+            vectorLength = 12;
+        }
+        else
+        {
+            if (symmetricAlgorithmUri != "http://www.w3.org/2001/04/xmlenc#des-cbc" &&
+                symmetricAlgorithmUri != "http://www.w3.org/2001/04/xmlenc#tripledes-cbc")
+            {
+                if (symmetricAlgorithmUri != "http://www.w3.org/2001/04/xmlenc#aes128-cbc" &&
+                    symmetricAlgorithmUri != "http://www.w3.org/2001/04/xmlenc#aes192-cbc" &&
+                    symmetricAlgorithmUri != "http://www.w3.org/2001/04/xmlenc#aes256-cbc")
+                {
+                    throw new CryptographicException("Uri not supported");
+                }
+
+                vectorLength = 16;
             }
             else
             {
-                string description = $"Attachment {uri.Substring(4)} cannot be found and can therefore not be decrypted";
-                Logger.Error(description);
-
-                throw new CryptographicException(description);
+                vectorLength = 8;
             }
         }
 
-        private Stream DecryptData(EncryptedData encryptedData, Stream encryptedTextStream, SymmetricAlgorithm encryptionAlgorithm)
+        return vectorLength;
+    }
+
+    #region Attachment Transformers
+
+    private abstract class AttachmentTransformer
+    {
+        public static AttachmentTransformer Create(string type)
         {
-            VirtualStream decryptedStream = CreateVirtualStreamOf(encryptedTextStream);
-
-            // save the original symmetric algorithm
-            CipherMode origMode = encryptionAlgorithm.Mode;
-            PaddingMode origPadding = encryptionAlgorithm.Padding;
-            byte[] origIV = encryptionAlgorithm.IV;
-
-            // read the IV from cipherValue
-            byte[] decryptionIV = null;
-            if (Mode != CipherMode.ECB)
+            switch (type)
             {
-                decryptionIV = GetDecryptionIV(encryptedData, encryptedTextStream, null);
+                case AttachmentCompleteTransformer.Type:
+                    return AttachmentCompleteTransformer.Default;
+
+                case AttachmentContentOnlyTransformer.Type:
+                    return AttachmentContentOnlyTransformer.Default;
+
+                default:
+                    throw new NotSupportedException($"{type} is a not supported Attachment transformer.");
             }
-
-            if (decryptionIV != null)
-            {
-                encryptionAlgorithm.IV = decryptionIV;
-            }
-
-            var cryptoStream = new CryptoStream(encryptedTextStream, encryptionAlgorithm.CreateDecryptor(), CryptoStreamMode.Read);
-
-            try
-            {
-                encryptionAlgorithm.Mode = Mode;
-                encryptionAlgorithm.Padding = Padding;
-                cryptoStream.CopyTo(decryptedStream);
-            }
-            finally
-            {
-                if (!cryptoStream.HasFlushedFinalBlock)
-                {
-                    cryptoStream.FlushFinalBlock();
-                }
-
-                // now restore the original symmetric algorithm
-                encryptionAlgorithm.Mode = origMode;
-                encryptionAlgorithm.Padding = origPadding;
-                encryptionAlgorithm.IV = origIV;
-            }
-
-            decryptedStream.Position = 0;
-
-            return decryptedStream;
         }
 
-        /// <summary>
-        /// Retrieves the decryption initialization vector (IV) from an EncryptedData  object.
-        /// </summary>
-        /// <returns>A byte array that contains the decryption initialization vector (IV).</returns>
-        /// <param name="encryptedData"></param>
-        /// <param name="symmetricAlgorithmUri"></param>        
-        public override byte[] GetDecryptionIV(EncryptedData encryptedData, string symmetricAlgorithmUri)
+        public abstract void Transform(Attachment attachment, Stream decryptedData, string contentType);
+
+        #region Implementations
+
+        private sealed class AttachmentCompleteTransformer : AttachmentTransformer
         {
-            if (encryptedData == null)
-            {
-                throw new ArgumentNullException(nameof(encryptedData));
-            }
+            public const string Type = "http://docs.oasis-open.org/wss/oasis-wss-SwAProfile-1.1#Attachment-Complete";
 
-            if (symmetricAlgorithmUri == null)
+            public static readonly AttachmentCompleteTransformer Default = new();
+
+            public override void Transform(Attachment attachment, Stream decryptedData, string contentType)
             {
-                if (encryptedData.EncryptionMethod == null)
+                // The decrypted data can contain MIME headers, therefore we'll need to parse
+                // the decrypted data as a MimePart, and make sure that the content is set correctly
+                // in the attachment.
+                var part = MimeEntity.Load(decryptedData) as MimePart ?? throw new InvalidOperationException("The decrypted stream could not be converted to a MIME part");
+                var contentStream = part.Content?.Stream ?? throw new InvalidOperationException("The decrypted stream could not be converted to a MIME part");
+
+                attachment.Content.Dispose();
+                attachment.UpdateContent(contentStream, contentType);
+
+                foreach (var header in part.Headers)
                 {
-                    throw new CryptographicException("Missing encryption algorithm");
+                    attachment.Properties.Add(header.Field, header.Value);
                 }
-
-                symmetricAlgorithmUri = encryptedData.EncryptionMethod.KeyAlgorithm;
             }
-
-            int vectorLength = GetIVLength(symmetricAlgorithmUri);
-            var iv = new byte[vectorLength];
-
-            Buffer.BlockCopy(encryptedData.CipherData.CipherValue, srcOffset: 0, dst: iv, dstOffset: 0, count: iv.Length);
-
-            return iv;
         }
 
-        private byte[] GetDecryptionIV(EncryptedData encryptedData, Stream encryptedTextStream, string symmetricAlgorithmUri)
+        private sealed class AttachmentContentOnlyTransformer : AttachmentTransformer
         {
-            if (encryptedData == null)
+            public const string Type = "http://docs.oasis-open.org/wss/oasis-wss-SwAProfile-1.1#Attachment-Content-Only";
+
+            public static readonly AttachmentContentOnlyTransformer Default = new();
+
+            public override void Transform(Attachment attachment, Stream decryptedData, string contentType)
             {
-                throw new ArgumentNullException(nameof(encryptedData));
+                attachment.Content.Dispose();
+                attachment.UpdateContent(decryptedData, contentType);
             }
-
-            if (symmetricAlgorithmUri == null)
-            {
-                if (encryptedData.EncryptionMethod == null)
-                {
-                    throw new CryptographicException("Missing encryption algorithm");
-                }
-
-                symmetricAlgorithmUri = encryptedData.EncryptionMethod.KeyAlgorithm;
-            }
-
-            int vectorLength = GetIVLength(symmetricAlgorithmUri);
-            var iv = new byte[vectorLength];
-
-            encryptedTextStream.Read(iv, 0, iv.Length);
-
-            return iv;
         }
-
-        private static int GetIVLength(string symmetricAlgorithmUri)
-        {
-            int vectorLength;
-            if (symmetricAlgorithmUri == "http://www.w3.org/2009/xmlenc11#aes128-gcm")
-            {
-                vectorLength = 12;
-            }
-            else
-            {
-                if (symmetricAlgorithmUri != "http://www.w3.org/2001/04/xmlenc#des-cbc" &&
-                    symmetricAlgorithmUri != "http://www.w3.org/2001/04/xmlenc#tripledes-cbc")
-                {
-                    if (symmetricAlgorithmUri != "http://www.w3.org/2001/04/xmlenc#aes128-cbc" &&
-                        symmetricAlgorithmUri != "http://www.w3.org/2001/04/xmlenc#aes192-cbc" &&
-                        symmetricAlgorithmUri != "http://www.w3.org/2001/04/xmlenc#aes256-cbc")
-                    {
-                        throw new CryptographicException("Uri not supported");
-                    }
-
-                    vectorLength = 16;
-                }
-                else
-                {
-                    vectorLength = 8;
-                }
-            }
-
-            return vectorLength;
-        }
-
-        #region Attachment Transformers
-
-        private abstract class AttachmentTransformer
-        {
-            public static AttachmentTransformer Create(string type)
-            {
-                switch (type)
-                {
-                    case AttachmentCompleteTransformer.Type:
-                        return AttachmentCompleteTransformer.Default;
-
-                    case AttachmentContentOnlyTransformer.Type:
-                        return AttachmentContentOnlyTransformer.Default;
-
-                    default:
-                        throw new NotSupportedException($"{type} is a not supported Attachment transformer.");
-                }
-            }
-
-            public abstract void Transform(Attachment attachment, Stream decryptedData, string contentType);
-
-            #region Implementations
-
-            private class AttachmentCompleteTransformer : AttachmentTransformer
-            {
-                public const string Type = "http://docs.oasis-open.org/wss/oasis-wss-SwAProfile-1.1#Attachment-Complete";
-
-                public static readonly AttachmentCompleteTransformer Default = new AttachmentCompleteTransformer();
-
-                public override void Transform(Attachment attachment, Stream decryptedData, string contentType)
-                {
-                    // The decrypted data can contain MIME headers, therefore we'll need to parse
-                    // the decrypted data as a MimePart, and make sure that the content is set correctly
-                    // in the attachment.
-                    var part = MimeEntity.Load(decryptedData) as MimePart;
-
-                    if (part == null)
-                    {
-                        throw new InvalidOperationException("The decrypted stream could not be converted to a MIME part");
-                    }
-
-                    attachment.Content.Dispose();
-                    attachment.UpdateContent(part.ContentObject.Stream, contentType);
-
-                    foreach (Header header in part.Headers)
-                    {
-                        attachment.Properties.Add(header.Field, header.Value);
-                    }
-                }
-            }
-
-            private class AttachmentContentOnlyTransformer : AttachmentTransformer
-            {
-                public const string Type = "http://docs.oasis-open.org/wss/oasis-wss-SwAProfile-1.1#Attachment-Content-Only";
-
-                public static readonly AttachmentContentOnlyTransformer Default = new AttachmentContentOnlyTransformer();
-
-                public override void Transform(Attachment attachment, Stream decryptedData, string contentType)
-                {
-                    attachment.Content.Dispose();
-                    attachment.UpdateContent(decryptedData, contentType);
-                }
-            }
-            #endregion
-        }
-
         #endregion
     }
+
+    #endregion
 }

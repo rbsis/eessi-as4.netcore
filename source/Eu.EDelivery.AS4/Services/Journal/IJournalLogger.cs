@@ -1,17 +1,15 @@
-﻿using System.Collections.Generic;
-using System.Threading.Tasks;
+﻿
+namespace Eu.EDelivery.AS4.Services.Journal;
 
-namespace Eu.EDelivery.AS4.Services.Journal
+/// <summary>
+/// Contract for loggers to write journal entries to external systems.
+/// </summary>
+public interface IJournalLogger
 {
     /// <summary>
-    /// Contract for loggers to write journal entries to external systems.
+    /// Writes out a given journal log <paramref name="entries"/>.
     /// </summary>
-    public interface IJournalLogger
-    {
-        /// <summary>
-        /// Writes out a given journal log <paramref name="entries"/>.
-        /// </summary>
-        /// <param name="entries">The entry that must be written.</param>
-        Task WriteLogEntriesAsync(IEnumerable<JournalLogEntry> entries);
-    }
+    /// <param name="entries">The entry that must be written.</param>
+    /// <param name="cancellation"></param>
+    Task WriteLogEntriesAsync(IEnumerable<JournalLogEntry> entries, CancellationToken cancellation);
 }

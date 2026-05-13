@@ -1,71 +1,70 @@
-﻿using System;
-using System.IO;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Text;
 using System.Xml.Serialization;
 using Eu.EDelivery.AS4.Model.Common;
 using Eu.EDelivery.AS4.Model.Internal;
 using Eu.EDelivery.AS4.Model.PMode;
 using Eu.EDelivery.AS4.Model.Submit;
 using Eu.EDelivery.AS4.Transformers;
-using Xunit;
+using Microsoft.Extensions.Logging.Abstractions;
 using static Eu.EDelivery.AS4.UnitTests.Properties.Resources;
 using CollaborationInfo = Eu.EDelivery.AS4.Model.Common.CollaborationInfo;
 
-namespace Eu.EDelivery.AS4.UnitTests.Transformers
+namespace Eu.EDelivery.AS4.UnitTests.Transformers;
+
+/// <summary>
+/// Testing the <see cref="SubmitMessageXmlTransformer" />
+/// </summary>
+public class GivenSubmitMessageXmlTransformerFacts
 {
-    /// <summary>
-    /// Testing the <see cref="SubmitMessageXmlTransformer" />
-    /// </summary>
-    public class GivenSubmitMessageXmlTransformerFacts
+    [Fact]
+    public async Task ThenPModeIsNotPartOfTheSerializationAsync()
     {
-        [Fact]
-        public async Task ThenPModeIsNotPartOfTheSerializationAsync()
+        // Arrange
+        var submitMessage = new SubmitMessage
         {
-            // Arrange
-            var submitMessage = new SubmitMessage
-            {
-                Collaboration = {AgreementRef = {PModeId = "this-pmode-id"}},
-                PMode = new SendingProcessingMode {Id = "other-pmode-id"}
-            };
+            Collaboration = { AgreementRef = new() { PModeId = "this-pmode-id" } },
+            PMode = new SendingProcessingMode { Id = "other-pmode-id" }
+        };
 
-            ReceivedMessage receivedmessage = CreateMessageFrom(submitMessage);
+        var receivedMessage = CreateMessageFrom(submitMessage);
 
-                // Act
-                MessagingContext messagingContext = await Transform(receivedmessage);
+        // Act
+        var messagingContext = await Transform(receivedMessage);
 
-                // Assert
-                Assert.Null(messagingContext.SubmitMessage.PMode);
+        // Assert
+        Assert.NotNull(messagingContext.SubmitMessage);
+        Assert.Null(messagingContext.SubmitMessage.PMode);
 
-            receivedmessage.UnderlyingStream.Dispose();
-        }
+        await receivedMessage.UnderlyingStream.DisposeAsync();
+    }
 
-        [Fact]
-        public async Task ThenTransformSucceedsWithPModeIdAsync()
+    [Fact]
+    public async Task ThenTransformSucceedsWithPModeIdAsync()
+    {
+        // Arrange
+        const string ExpectedPModeId = "01-pmode";
+        var submitMessage = new SubmitMessage
         {
-            // Arrange
-            const string expectedPModeId = "01-pmode";
-            var submitMessage = new SubmitMessage
-            {
-                Collaboration = new CollaborationInfo {AgreementRef = new Agreement {PModeId = expectedPModeId}}
-            };
+            Collaboration = new CollaborationInfo { AgreementRef = new Agreement { PModeId = ExpectedPModeId } }
+        };
 
-            ReceivedMessage receivedMessage = CreateMessageFrom(submitMessage);
+        var receivedMessage = CreateMessageFrom(submitMessage);
 
-                // Act
-                MessagingContext messagingContext = await Transform(receivedMessage);
+        // Act
+        var messagingContext = await Transform(receivedMessage);
 
-                // Assert
-                Assert.Equal(expectedPModeId, messagingContext.SubmitMessage.Collaboration.AgreementRef.PModeId);
+        // Assert
+        Assert.NotNull(messagingContext.SubmitMessage);
+        Assert.Equal(ExpectedPModeId, messagingContext.SubmitMessage.Collaboration.AgreementRef?.PModeId);
 
-            receivedMessage.UnderlyingStream.Dispose();
-        }
+        await receivedMessage.UnderlyingStream.DisposeAsync();
+    }
 
-        [Fact]
-        public void TransformInvalidXmlInputFailsDeserializing()
-        {
-            Assert.All(new[]
-            {
+    [Fact]
+    public async Task TransformInvalidXmlInputFailsDeserializing()
+    {
+        await Assert.AllAsync(
+            [
                 "<Invalid-XML>",
                 submitmessage_invalid_messageproperties,
                 submitmessage_missing_payload_location,
@@ -74,36 +73,35 @@ namespace Eu.EDelivery.AS4.UnitTests.Transformers
                 submitmessage_missing_collaboration,
                 submitmessage_missing_collaboration_agreement,
                 submitmessage_missing_collaboration_agreement_pmodeid
-            }, x =>
+            ], async x =>
             {
                 // Arrange
                 var messageStream = new MemoryStream(Encoding.UTF8.GetBytes(x));
                 var receivedMessage = new ReceivedMessage(messageStream);
 
                 // Act / Assert
-                Assert.ThrowsAny<Exception>(() => Transform(receivedMessage).Result);
+                await Assert.ThrowsAnyAsync<Exception>(async () => await Transform(receivedMessage));
             });
-        }
+    }
 
-        protected async Task<MessagingContext> Transform(ReceivedMessage message)
-        {
-            return await new SubmitMessageXmlTransformer().TransformAsync(message);
-        }
+    protected static async Task<MessagingContext> Transform(ReceivedMessage message)
+    {
+        return await new SubmitMessageXmlTransformer(NullLogger<SubmitMessageXmlTransformer>.Instance).TransformAsync(message, CancellationToken.None);
+    }
 
-        private static ReceivedMessage CreateMessageFrom(SubmitMessage submitMessage)
-        {
-            return new ReceivedMessage(WriteSubmitMessageToStream(submitMessage));
-        }
+    private static ReceivedMessage CreateMessageFrom(SubmitMessage submitMessage)
+    {
+        return new ReceivedMessage(WriteSubmitMessageToStream(submitMessage));
+    }
 
-        private static MemoryStream WriteSubmitMessageToStream(SubmitMessage submitMessage)
-        {
-            var memoryStream = new MemoryStream();
-            var serializer = new XmlSerializer(typeof(SubmitMessage));
+    private static MemoryStream WriteSubmitMessageToStream(SubmitMessage submitMessage)
+    {
+        var memoryStream = new MemoryStream();
+        var serializer = new XmlSerializer(typeof(SubmitMessage));
 
-            serializer.Serialize(memoryStream, submitMessage);
-            memoryStream.Position = 0;
+        serializer.Serialize(memoryStream, submitMessage);
+        memoryStream.Position = 0;
 
-            return memoryStream;
-        }
+        return memoryStream;
     }
 }

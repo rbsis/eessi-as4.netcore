@@ -1,52 +1,50 @@
-﻿using System;
-using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
-using Eu.EDelivery.AS4.Entities;
-using Eu.EDelivery.AS4.Extensions;
+﻿using Eu.EDelivery.AS4.Entities;
 using Eu.EDelivery.AS4.Model.Core;
 using Eu.EDelivery.AS4.Model.Internal;
 using Eu.EDelivery.AS4.Steps.Submit;
 using Eu.EDelivery.AS4.UnitTests.Common;
 using Eu.EDelivery.AS4.UnitTests.Model;
 using Eu.EDelivery.AS4.UnitTests.Repositories;
-using Xunit;
+using Microsoft.Extensions.Logging;
+using NSubstitute;
 
-namespace Eu.EDelivery.AS4.UnitTests.Steps.Submit
+namespace Eu.EDelivery.AS4.UnitTests.Steps.Submit;
+
+/// <summary>
+/// Testing <see cref="StoreAS4MessageStep" />
+/// </summary>
+public class GivenStoreAS4MessageStepsFacts : GivenDatastoreFacts
 {
-    /// <summary>
-    /// Testing <see cref="StoreAS4MessageStep" />
-    /// </summary>
-    public class GivenStoreAS4MessageStepsFacts : GivenDatastoreFacts
+    private readonly InMemoryMessageBodyStore _messageBodyStore = new(Default.SerializerProvider);
+
+    [Fact]
+    public async Task MessageGetsSavedWithOperationToBeProcessed()
     {
-        private readonly InMemoryMessageBodyStore _messageBodyStore = new InMemoryMessageBodyStore();
+        // Arrange
+        var id = Guid.NewGuid().ToString();
 
-        [Fact]
-        public async Task MessageGetsSavedWithOperationToBeProcessed()
-        {
-            // Arrange
-            string id = Guid.NewGuid().ToString();
+        var sut = new StoreAS4MessageStep(
+            Substitute.For<ILogger<StoreAS4MessageStep>>(),
+            Default.NewOutMessageService(this, _messageBodyStore));
 
-            var sut = new StoreAS4MessageStep(StubConfig.Default, GetDataStoreContext, _messageBodyStore);
+        // Act
+        await sut.ExecuteAsync(
+            new MessagingContext(AS4Message.Create(new FilledUserMessage(id)), MessagingContextMode.Submit), CancellationToken.None);
 
-            // Act
-            await sut.ExecuteAsync(
-                new MessagingContext(AS4Message.Create(new FilledUserMessage(id)), MessagingContextMode.Submit));
+        // Assert
+        GetDataStoreContext.AssertOutMessage(
+            id,
+            async m =>
+            {
+                Assert.NotNull(m);
+                Assert.Equal(Operation.ToBeProcessed, m.Operation);
+                Assert.True(await _messageBodyStore.LoadMessageBodyAsync(m.MessageLocation, CancellationToken.None) != Stream.Null);
+            });
+    }
 
-            // Assert
-            GetDataStoreContext.AssertOutMessage(
-                id,
-                async m =>
-                {
-                    Assert.Equal(Operation.ToBeProcessed, m.Operation);
-                    Assert.True(await _messageBodyStore.LoadMessageBodyAsync(m.MessageLocation) != Stream.Null);
-                });
-        }
-
-        protected override void Disposing()
-        {
-            _messageBodyStore.Dispose();
-            base.Disposing();
-        }
+    protected override void Disposing()
+    {
+        _messageBodyStore.Dispose();
+        base.Disposing();
     }
 }

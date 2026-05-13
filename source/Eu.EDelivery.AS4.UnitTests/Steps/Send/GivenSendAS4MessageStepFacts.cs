@@ -1,245 +1,235 @@
-﻿using System;
-using System.IO;
-using System.Net;
-using System.Threading.Tasks;
+﻿using System.Net;
 using Eu.EDelivery.AS4.Entities;
 using Eu.EDelivery.AS4.Extensions;
 using Eu.EDelivery.AS4.Http;
 using Eu.EDelivery.AS4.Model.Core;
 using Eu.EDelivery.AS4.Model.Internal;
 using Eu.EDelivery.AS4.Model.PMode;
-using Eu.EDelivery.AS4.Serialization;
-using Eu.EDelivery.AS4.Steps;
 using Eu.EDelivery.AS4.Steps.Send;
+using Eu.EDelivery.AS4.Steps.Send.Response;
 using Eu.EDelivery.AS4.TestUtils.Stubs;
 using Eu.EDelivery.AS4.UnitTests.Common;
 using Eu.EDelivery.AS4.UnitTests.Extensions;
 using Eu.EDelivery.AS4.UnitTests.Model;
 using Eu.EDelivery.AS4.UnitTests.Repositories;
-using Xunit;
+using Microsoft.Extensions.Logging.Abstractions;
 using RetryReliability = Eu.EDelivery.AS4.Entities.RetryReliability;
 
-namespace Eu.EDelivery.AS4.UnitTests.Steps.Send
+namespace Eu.EDelivery.AS4.UnitTests.Steps.Send;
+
+public class GivenSendAS4MessageStepFacts : GivenDatastoreFacts
 {
-    public class GivenSendAS4MessageStepFacts : GivenDatastoreFacts
+    [Fact]
+    public async Task UseReceivingPModeWhenNoSendingPModeIsAvailable()
     {
-        [Fact]
-        public async Task Use_ReceivingPMode_When_No_SendingPMode_Is_Available()
+        // Arrange
+        var userMessage = new UserMessage($"user-{Guid.NewGuid()}");
+        var message = AS4Message.Create(userMessage);
+
+        var output = new MemoryStream();
+        await Default.SerializerProvider
+            .Get(message.ContentType)
+            .SerializeAsync(message, output, CancellationToken.None);
+
+        var ctx = new MessagingContext(
+            message,
+            new ReceivedMessage(output, message.ContentType),
+            MessagingContextMode.Send)
         {
-            // Arrange
-            var userMessage = new UserMessage($"user-{Guid.NewGuid()}");
-            var message = AS4Message.Create(userMessage);
-
-            var output = new MemoryStream();
-            await SerializerProvider
-                .Default
-                .Get(message.ContentType)
-                .SerializeAsync(message, output);
-
-            var ctx = new MessagingContext(
-                message, 
-                new ReceivedMessage(output, message.ContentType),
-                MessagingContextMode.Send)
+            ReceivingPMode = new ReceivingProcessingMode
             {
-                ReceivingPMode = new ReceivingProcessingMode
+                ReplyHandling =
                 {
-                    ReplyHandling =
+                    ResponseConfiguration = new PushConfiguration
                     {
-                        ResponseConfiguration = new PushConfiguration
-                        {
-                            Protocol = { Url = "http://some/endpoint/path" }
-                        }
+                        Protocol = { Url = "http://some/endpoint/path" }
                     }
                 }
-            };
+            }
+        };
 
-            var receipt = new Receipt($"receipt-{Guid.NewGuid()}", userMessage.MessageId);
-            var stub = StubHttpClient.ThatReturns(AS4Message.Create(receipt));
+        var receipt = new Receipt($"receipt-{Guid.NewGuid()}", userMessage.MessageId);
+        var stub = StubHttpClient.ThatReturns(AS4Message.Create(receipt));
 
-            IStep sut = CreateSendStepWithResponse(stub);
+        var sut = CreateSendStepWithResponse(stub);
 
-            // Act
-            StepResult result = await sut.ExecuteAsync(ctx);
+        // Act
+        var result = await sut.ExecuteAsync(ctx, CancellationToken.None);
 
-            // Assert
-            Assert.True(result.Succeeded, "Sending UserMessage step has not succeeded");
-            Assert.Equal(receipt, result.MessagingContext.AS4Message.PrimaryMessageUnit);
+        // Assert
+        Assert.True(result.Succeeded, "Sending UserMessage step has not succeeded");
+        Assert.NotNull(result.MessagingContext.AS4Message);
+        Assert.Equal(receipt, result.MessagingContext.AS4Message.PrimaryMessageUnit);
 
-            // TearDown
-            ctx.Dispose();
-        }
+        // TearDown
+        ctx.Dispose();
+    }
 
-        [Fact]
-        public async Task Update_RetryReliability_To_Pending_When_Receiver_Is_Offline()
+    [Fact]
+    public async Task UpdateRetryReliabilityToPendingWhenReceiverIsOffline()
+    {
+        // Arrange
+        var ebmsMessageId = $"user-{Guid.NewGuid()}";
+        var tobeSendMessage = AS4Message.Create(new UserMessage(ebmsMessageId));
+
+        var outMessage = new OutMessage(ebmsMessageId);
+        GetDataStoreContext.InsertOutMessage(outMessage);
+        GetDataStoreContext.InsertRetryReliability(
+            RetryReliability.CreateForOutMessage(
+                refToOutMessageId: outMessage.Id,
+                maxRetryCount: 2,
+                retryInterval: TimeSpan.FromSeconds(1),
+                type: RetryType.Send));
+
+        var ctx = new MessagingContext(
+            tobeSendMessage,
+            new ReceivedEntityMessage(
+                outMessage,
+                tobeSendMessage.ToStream(),
+                tobeSendMessage.ContentType),
+            MessagingContextMode.Send)
         {
-            // Arrange
-            string ebmsMessageId = $"user-{Guid.NewGuid()}";
-            AS4Message tobeSendMessage = AS4Message.Create(new UserMessage(ebmsMessageId));
+            SendingPMode = CreateSendPModeWithPushUrl()
+        };
 
-            var outMessage = new OutMessage(ebmsMessageId);
-            GetDataStoreContext.InsertOutMessage(outMessage);
-            GetDataStoreContext.InsertRetryReliability(
-                RetryReliability.CreateForOutMessage(
-                    refToOutMessageId: outMessage.Id,
-                    maxRetryCount: 2,
-                    retryInterval: TimeSpan.FromSeconds(1),
-                    type: RetryType.Send));
+        var sabotageException = new WebException("Remote host not available");
+        var sut = CreateSendStepWithResponse(
+            StubHttpClient.ThatThrows(sabotageException));
 
-            var ctx = new MessagingContext(
-                tobeSendMessage,
-                new ReceivedEntityMessage(
-                    outMessage,
-                    tobeSendMessage.ToStream(),
-                    tobeSendMessage.ContentType),
-                MessagingContextMode.Send)
+        // Act / Assert
+        var actualException = await Assert.ThrowsAsync<WebException>(
+            () => sut.ExecuteAsync(ctx, CancellationToken.None));
+
+        Assert.Equal(sabotageException, actualException);
+
+        GetDataStoreContext.AssertRetryRelatedOutMessage(
+            outMessage.Id,
+            r =>
             {
-                SendingPMode = CreateSendPModeWithPushUrl()
-            };
+                Assert.NotNull(r);
+                Assert.Equal(RetryStatus.Pending, r.Status);
+            });
+    }
 
-            var sabotageException = new WebException("Remote host not available");
-            IStep sut = CreateSendStepWithResponse(
-                StubHttpClient.ThatThrows(sabotageException));
+    [Fact]
+    public async Task AfterSendUpdatesRequestOperationAndStatusToSentForExsitingSendPMode()
+    {
+        // Arrange
+        var ebmsMessageId = $"user-{Guid.NewGuid()}";
+        var tobeSentMsg = AS4Message.Create(new FilledUserMessage(ebmsMessageId));
 
-            // Act
-            StepResult result = await sut.ExecuteAsync(ctx);
+        var inserted = new OutMessage(ebmsMessageId: ebmsMessageId);
+        GetDataStoreContext.InsertOutMessage(inserted);
 
-            // Assert
-            Assert.False(result.Succeeded);
-            GetDataStoreContext.AssertRetryRelatedOutMessage(
-                outMessage.Id,
-                r =>
-                {
-                    Assert.NotNull(r);
-                    Assert.Equal(RetryStatus.Pending, r.Status);
-                });
-        }
+        var receivedMessage = new ReceivedEntityMessage(
+            inserted,
+            tobeSentMsg.ToStream(),
+            tobeSentMsg.ContentType);
 
-        [Fact]
-        public async Task After_Send_Updates_Request_Operation_And_Status_To_Sent_For_Exsiting_SendPMode()
+        var ctx = new MessagingContext(
+            tobeSentMsg,
+            receivedMessage,
+            MessagingContextMode.Send)
         {
-            // Arrange
-            string ebmsMessageId = $"user-{Guid.NewGuid()}";
-            AS4Message tobeSentMsg = AS4Message.Create(new FilledUserMessage(ebmsMessageId));
+            SendingPMode = CreateSendPModeWithPushUrl()
+        };
 
-            var inserted = new OutMessage(ebmsMessageId: ebmsMessageId);
-            GetDataStoreContext.InsertOutMessage(inserted);
+        var receiptMessage =
+            AS4Message.Create(new Receipt($"receipt-{Guid.NewGuid()}", $"user-{Guid.NewGuid()}"));
 
-            var receivedMessage = new ReceivedEntityMessage(
-                inserted,
-                tobeSentMsg.ToStream(),
-                tobeSentMsg.ContentType);
+        // Act 
+        var sut = CreateSendStepWithResponse(
+            StubHttpClient.ThatReturns(receiptMessage));
 
-            var ctx = new MessagingContext(
-                tobeSentMsg, 
-                receivedMessage,
-                MessagingContextMode.Send)
-                {
-                    SendingPMode = CreateSendPModeWithPushUrl()
-                };
+        await sut.ExecuteAsync(ctx, CancellationToken.None);
 
-            AS4Message receiptMessage = 
-                AS4Message.Create(new Receipt($"receipt-{Guid.NewGuid()}", $"user-{Guid.NewGuid()}"));
-
-            // Act 
-            IStep sut = CreateSendStepWithResponse(
-                StubHttpClient.ThatReturns(receiptMessage));
-
-            await sut.ExecuteAsync(ctx);
-
-            // Assert
-            GetDataStoreContext.AssertOutMessage(
-                ebmsMessageId,
-                message =>
-                {
-                    Assert.Equal(OutStatus.Sent, message.Status.ToEnum<OutStatus>());
-                    Assert.Equal(Operation.Sent, message.Operation);
-                });
-        }
-
-        [Fact]
-        public async Task Send_Results_In_Stop_Execution_If_Response_Is_PullRequest_Warning_For_Exsisting_SendPMode()
-        {
-            // Arrange
-            AS4Message as4Message = AS4Message.Create(Error.CreatePullRequestWarning($"error-{Guid.NewGuid()}"));
-            IStep sut = CreateSendStepWithResponse(
-                StubHttpClient.ThatReturns(as4Message));
-
-            MessagingContext ctx = CreateMessagingContextWithDefaultPullRequest();
-            ctx.SendingPMode = CreateSendPModeWithPushUrl();
-
-            // Act
-            StepResult actualResult = await sut.ExecuteAsync(ctx);
-
-            // Assert
-            Assert.False(actualResult.CanProceed);
-        }
-
-        [Fact]
-        public async Task Send_Returns_Empty_Response_For_Empty_Request_For_Existing_SendPMode()
-        {
-            // Arrange
-            IStep sut = CreateSendStepWithResponse(
-                StubHttpClient.ThatReturns(HttpStatusCode.Accepted));
-
-            MessagingContext ctx = CreateMessagingContextWithDefaultPullRequest();
-            ctx.SendingPMode = CreateSendPModeWithPushUrl();
-
-            // Act
-            StepResult actualResult = await sut.ExecuteAsync(ctx);
-
-            // Assert
-            Assert.True(actualResult.MessagingContext.AS4Message.IsEmpty);
-            Assert.False(actualResult.CanProceed);
-        }
-
-        [Fact]
-        public async Task Send_Returns_Empty_Response_For_Empty_Request_For_Response_SendPMode()
-        {
-            // Arrange
-            IStep sut = CreateSendStepWithResponse(
-                StubHttpClient.ThatReturns(HttpStatusCode.Accepted));
-
-            MessagingContext ctx = CreateMessagingContextWithDefaultPullRequest();
-            ctx.SendingPMode = CreateSendPModeWithPushUrl();
-
-            // Act
-            StepResult actualResult = await sut.ExecuteAsync(ctx);
-
-            // Assert
-            Assert.True(actualResult.MessagingContext.AS4Message.IsEmpty);
-            Assert.False(actualResult.CanProceed);
-        }
-
-        private static MessagingContext CreateMessagingContextWithDefaultPullRequest()
-        {
-            var pullRequest = AS4Message.Create(
-                new PullRequest(messageId: "message-id", mpc: null));
-
-            return new MessagingContext(
-                new ReceivedMessage(
-                    pullRequest.ToStream(), 
-                    pullRequest.ContentType),
-                MessagingContextMode.Receive);
-        }
-
-        private IStep CreateSendStepWithResponse(IHttpClient client)
-        {
-            return new SendAS4MessageStep(GetDataStoreContext, client);
-        }
-
-        private static SendingProcessingMode CreateSendPModeWithPushUrl()
-        {
-            return new SendingProcessingMode
+        // Assert
+        GetDataStoreContext.AssertOutMessage(
+            ebmsMessageId,
+            message =>
             {
-                PushConfiguration = new PushConfiguration
-                {
-                    Protocol = { Url = "http://ignored/path" }
-                },
-                Reliability =
-                {
-                    ReceptionAwareness = { IsEnabled = true }
-                }
-            };
-        }
+                Assert.NotNull(message);
+                Assert.Equal(OutStatus.Sent, message.Status.ToEnum<OutStatus>());
+                Assert.Equal(Operation.Sent, message.Operation);
+            });
+    }
+
+    [Fact]
+    public async Task SendResultsInStopExecutionIfResponseIsPullRequestWarningForExsistingSendPMode()
+    {
+        // Arrange
+        var as4Message = AS4Message.Create(Error.CreatePullRequestWarning($"error-{Guid.NewGuid()}"));
+        var sut = CreateSendStepWithResponse(
+            StubHttpClient.ThatReturns(as4Message));
+
+        var ctx = CreateMessagingContextWithDefaultPullRequest();
+        ctx.SendingPMode = CreateSendPModeWithPushUrl();
+
+        // Act
+        var actualResult = await sut.ExecuteAsync(ctx, CancellationToken.None);
+
+        // Assert
+        Assert.False(actualResult.CanProceed);
+    }
+
+    [Fact]
+    public async Task SendReturnsEmptyResponseForEmptyRequestForExistingSendPMode()
+    {
+        // Arrange
+        var sut = CreateSendStepWithResponse(
+            StubHttpClient.ThatReturns(AS4Message.Empty, HttpStatusCode.Accepted));
+
+        var ctx = CreateMessagingContextWithDefaultPullRequest();
+        ctx.SendingPMode = CreateSendPModeWithPushUrl();
+
+        // Act
+        var actualResult = await sut.ExecuteAsync(ctx, CancellationToken.None);
+
+        // Assert
+        Assert.NotNull(actualResult.MessagingContext.AS4Message);
+        Assert.True(actualResult.MessagingContext.AS4Message.IsEmpty);
+        Assert.False(actualResult.CanProceed);
+    }
+
+    private static MessagingContext CreateMessagingContextWithDefaultPullRequest()
+    {
+        var pullRequest = AS4Message.Create(
+            new PullRequest(messageId: "message-id", mpc: null));
+
+        return new MessagingContext(
+            new ReceivedMessage(
+                pullRequest.ToStream(),
+                pullRequest.ContentType),
+            MessagingContextMode.Receive);
+    }
+
+    private SendAS4MessageStep CreateSendStepWithResponse(IReliableHttpClient client) => new(
+        NullLogger<SendAS4MessageStep>.Instance,
+        client: client,
+        Default.CertificateRepository,
+        Default.NewMarkForRetryService(this),
+        StubPiggyBackingService.Instance,
+        CreatePullRequestResponseHandler(),
+        Default.SerializerProvider);
+
+    private static PullRequestResponseHandler CreatePullRequestResponseHandler() => new(
+        new EmptyBodyResponseHandler(
+            NullLogger<EmptyBodyResponseHandler>.Instance,
+            new TailResponseHandler()),
+        StubPiggyBackingService.Instance);
+
+    private static SendingProcessingMode CreateSendPModeWithPushUrl()
+    {
+        return new SendingProcessingMode
+        {
+            PushConfiguration = new PushConfiguration
+            {
+                Protocol = { Url = "http://ignored/path" }
+            },
+            Reliability =
+            {
+                ReceptionAwareness = { IsEnabled = true }
+            }
+        };
     }
 }

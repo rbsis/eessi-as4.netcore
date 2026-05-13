@@ -1,105 +1,91 @@
-﻿using System;
-using System.Reactive.Concurrency;
+﻿using System.Reactive.Concurrency;
 using System.Reactive.Linq;
 using System.Reactive.Threading.Tasks;
-using System.Threading;
-using System.Threading.Tasks;
-using Eu.EDelivery.AS4.Common;
 using Eu.EDelivery.AS4.Entities;
-using Eu.EDelivery.AS4.Model.Internal;
 using Eu.EDelivery.AS4.Strategies.Database;
-using log4net;
-using Eu.EDelivery.AS4.Extensions;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
-namespace Eu.EDelivery.AS4.Agents
+namespace Eu.EDelivery.AS4.Agents;
+
+/// <summary>
+/// <see cref="IAgent"/> implementation that runs a Clean Up job every day.
+/// This job consists of deleting messages that are inserted older that the given retention period (local configuration settings specifies this in days).
+/// </summary>
+/// <seealso cref="IAgent" />
+internal class CleanUpAgent : IAgent
 {
+    private readonly ILogger<CleanUpAgent> _logger;
+
+    private readonly IDbContextFactory<DatastoreContext> _contextFactory;
+    private readonly TimeSpan _retentionPeriod;
+
     /// <summary>
-    /// <see cref="IAgent"/> implementation that runs a Clean Up job every day.
-    /// This job consists of deleting messages that are inserted older that the given retention period (local configuration settings specifies this in days).
+    /// Initializes a new instance of the <see cref="CleanUpAgent" /> class.
     /// </summary>
-    /// <seealso cref="IAgent" />
-    internal class CleanUpAgent : IAgent
+    /// <param name="logger"></param>
+    /// <param name="contextFactory">The context factory.</param>
+    /// <param name="retentionPeriod">The retention period.</param>
+    public CleanUpAgent(ILogger<CleanUpAgent> logger, IDbContextFactory<DatastoreContext> contextFactory, TimeSpan retentionPeriod)
     {
-        private static readonly ILog Logger = LogManager.GetLogger( System.Reflection.MethodBase.GetCurrentMethod().DeclaringType );
+        _logger = logger;
+        _contextFactory = contextFactory;
+        _retentionPeriod = retentionPeriod;
+    }
 
-        private readonly Func<DatastoreContext> _storeExpression;
-        private readonly TimeSpan _retentionPeriod;
+    /// <summary>
+    /// Gets the agent configuration.
+    /// </summary>
+    /// <value>The agent configuration.</value>
+    public AgentConfig AgentConfig { get; } = new AgentConfig("Clean Up Agent");
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="CleanUpAgent" /> class.
-        /// </summary>
-        /// <param name="storeExpression">The store expression.</param>
-        /// <param name="retentionPeriod">The retention period.</param>
-        public CleanUpAgent(Func<DatastoreContext> storeExpression, TimeSpan retentionPeriod)
+    /// <summary>
+    /// Starts the specified agent.
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation.</param>
+    /// <returns></returns>
+    public async Task StartAsync(CancellationToken cancellationToken)
+    {
+        _logger.LogTrace("Starting {Name}...", AgentConfig.Name);
+        _logger.LogDebug("Will clean up entries older than: \"{RetentionPeriod}\"", DateTimeOffset.Now.Subtract(_retentionPeriod));
+
+        try
         {
-            if (storeExpression == null)
-            {
-                throw new ArgumentNullException(nameof(storeExpression));
-            }
-
-            _storeExpression = storeExpression;
-            _retentionPeriod = retentionPeriod;
+            await Observable.Interval(TimeSpan.FromDays(1), TaskPoolScheduler.Default)
+                .StartWith(0)
+                .Do(_ => StartCleaningMessagesTables())
+                .ToTask(cancellationToken);
         }
-
-        /// <summary>
-        /// Gets the agent configuration.
-        /// </summary>
-        /// <value>The agent configuration.</value>
-        public AgentConfig AgentConfig { get; } = new AgentConfig("Clean Up Agent");
-
-        /// <summary>
-        /// Starts the specified agent.
-        /// </summary>
-        /// <param name="cancellation">The cancellation.</param>
-        /// <returns></returns>
-        public async Task Start(CancellationToken cancellation)
+        catch (TaskCanceledException ex)
         {
-            Logger.Trace($"{AgentConfig.Name} Started");
-            Logger.Debug($"Will clean up entries older than: \"{DateTimeOffset.Now.Subtract(_retentionPeriod)}\"");
-
-            try
-            {
-                await Observable.Interval(TimeSpan.FromDays(1), TaskPoolScheduler.Default)
-                    .StartWith(0)
-                    .Do(_ => StartCleaningMessagesTables())
-                    .ToTask(cancellation);
-            }
-            catch (TaskCanceledException)
-            {
-                Logger.Trace($"{AgentConfig.Name} Stopped!");
-            }
+            _logger.LogError(ex, "{Name} Stopped!", AgentConfig.Name);
         }
+    }
 
-        private void StartCleaningMessagesTables()
+    /// <summary>
+    /// Stops this agent.
+    /// </summary>
+    public Task StopAsync(CancellationToken cancellationToken)
+    {
+        return Task.CompletedTask;
+    }
+
+    private void StartCleaningMessagesTables()
+    {
+        using var context = _contextFactory.CreateDbContext();
+        var allowedOperations = new[]
         {
-            using (DatastoreContext context = _storeExpression())
-            {
-                var allowedOperations = new[]
-                {
-                    Operation.Delivered,
-                    Operation.Forwarded,
-                    Operation.Notified,
-                    Operation.Sent,
-                    Operation.NotApplicable,
-                    Operation.Undetermined
-                };
+            Operation.Delivered,
+            Operation.Forwarded,
+            Operation.Notified,
+            Operation.Sent,
+            Operation.NotApplicable,
+            Operation.Undetermined
+        };
 
-                foreach (string table in DatastoreTable.DomainEntityTables)
-                {
-                    context.NativeCommands
-                           .BatchDeleteOverRetentionPeriod(table, _retentionPeriod, allowedOperations);
-                }
-            }
-        }
-
-        /// <summary>
-        /// Stops this agent.
-        /// </summary>
-        public void Stop() { }
-
-        public Task<MessagingContext> Process(MessagingContext message, CancellationToken cancellation)
+        foreach (var table in DatastoreTable.DomainEntityTables)
         {
-            throw new NotImplementedException();
+            context.NativeCommands.BatchDeleteOverRetentionPeriod(table, _retentionPeriod, allowedOperations);
         }
     }
 }

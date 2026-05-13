@@ -1,22 +1,21 @@
 ﻿using System.Xml.Serialization;
 
-namespace Eu.EDelivery.AS4.Xml
-{
-    public partial class Property
-    {
-        [XmlAttribute("type")]
-        public string Type { get; set; }
+namespace Eu.EDelivery.AS4.Xml;
 
-        [XmlIgnore]
-        public bool TypeSpecified
+public partial class Property
+{
+    [XmlAttribute("type")]
+    public string? Type { get; set; }
+
+    [XmlIgnore]
+    public bool TypeSpecified
+    {
+        get { return Type != null; }
+        set
         {
-            get { return Type != null; }
-            set
+            if (!value)
             {
-                if (value == false)
-                {
-                    Type = null;
-                }
+                Type = null;
             }
         }
     }

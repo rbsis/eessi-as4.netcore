@@ -1,69 +1,44 @@
 ﻿using Eu.EDelivery.AS4.Factories;
 using Eu.EDelivery.AS4.Model.Common;
 using Eu.EDelivery.AS4.Model.Core;
-using Xunit;
 
-namespace Eu.EDelivery.AS4.UnitTests.Factories {
-    public class GivenPayloadFileNameFactoryFacts
+namespace Eu.EDelivery.AS4.UnitTests.Factories;
+
+public class GivenPayloadFileNameFactoryFacts
+{
+    [Fact]
+    public void DefaultPatternIsAttachmentIdPattern()
     {
-        [Fact]
-        public void ThenGenerateFileNameWithMessageIdPattern()
-        {
-            string messageId = "someMessageId";
+        var payloadId = "earth.jpg";
+        var attachment = new Attachment(payloadId);
+        var userMessage = new MessageInfo("messageId");
 
-            var m = new MessageInfo(messageId);
+        var payloadFileName = PayloadFileNameFactory.CreateFileName(null, attachment, userMessage);
 
-            var payloadFileName = PayloadFileNameFactory.CreateFileName("{messageId}", null, m);
+        Assert.Equal(payloadId, payloadFileName);
+    }
 
-            Assert.Equal(messageId, payloadFileName);
-        }
+    [Fact]
+    public void ThenGenerateFileNameWithCombinedPattern()
+    {
+        var attachment = new Attachment("earth.jpg");
+        var userMessage = new MessageInfo("messageId");
 
-        [Fact]
-        public void ThenGenerateFileNameWithAttachmentIdPattern()
-        {
-            string payloadId = "earth.jpg";
+        var payloadFileName = PayloadFileNameFactory.CreateFileName("{MessageId}_{AttachmentId}", attachment, userMessage);
 
-            var attachment = new Attachment(payloadId);
+        Assert.Equal($"{userMessage.MessageId}_{attachment.Id}", payloadFileName);
+    }
 
-            var payloadFileName = PayloadFileNameFactory.CreateFileName("{ATTACHMENTID}", attachment, null);
+    [Fact]
+    public void ThenAppendAttachmentIdIfPatternContainsNoMacro()
+    {
+        var attachment = new Attachment("earth.jpg");
+        var userMessage = new MessageInfo("messageId");
 
-            Assert.Equal(payloadId, payloadFileName);
-        }
+        var pattern = "abc_";
 
-        [Fact]
-        public void DefaultPatternIsAttachmentIdPattern()
-        {
-            string payloadId = "earth.jpg";
-            var attachment = new Attachment(payloadId);
-            var userMessage = new MessageInfo("messageId");
+        var payloadFileName = PayloadFileNameFactory.CreateFileName(pattern, attachment, userMessage);
 
-            var payloadFileName = PayloadFileNameFactory.CreateFileName(null, attachment, userMessage);
-
-            Assert.Equal(payloadId, payloadFileName);
-        }
-
-        [Fact]
-        public void ThenGenerateFileNameWithCombinedPattern()
-        {            
-            var attachment = new Attachment("earth.jpg");
-            var userMessage = new MessageInfo("messageId");
-
-            var payloadFileName = PayloadFileNameFactory.CreateFileName("{MessageId}_{AttachmentId}", attachment, userMessage);
-
-            Assert.Equal($"{userMessage.MessageId}_{attachment.Id}", payloadFileName);
-        }
-
-        [Fact]
-        public void ThenAppendAttachmentIdIfPatternContainsNoMacro()
-        {
-            var attachment = new Attachment("earth.jpg");
-            var userMessage = new MessageInfo("messageId");
-
-            var pattern = "abc_";
-
-            var payloadFileName = PayloadFileNameFactory.CreateFileName(pattern, attachment, userMessage);
-
-            Assert.Equal($"abc_{attachment.Id}", payloadFileName);
-        }
+        Assert.Equal($"abc_{attachment.Id}", payloadFileName);
     }
 }

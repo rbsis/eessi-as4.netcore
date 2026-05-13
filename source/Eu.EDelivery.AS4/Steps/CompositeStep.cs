@@ -1,61 +1,53 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using Eu.EDelivery.AS4.Model.Internal;
+﻿using Eu.EDelivery.AS4.Model.Internal;
 
-namespace Eu.EDelivery.AS4.Steps
+namespace Eu.EDelivery.AS4.Steps;
+
+/// <summary>
+/// Composition of Steps
+/// </summary>
+[NotConfigurable]
+public class CompositeStep : IStep
 {
+    private readonly IList<IStep> _steps;
+
     /// <summary>
-    /// Composition of Steps
+    /// Initializes a new instance of the <see cref="CompositeStep"/> class. 
+    /// Create a <see cref="CompositeStep"/> that acts as a
+    /// Composition of <see cref="IStep"/> implementations
     /// </summary>
-    [NotConfigurable]
-    public class CompositeStep : IStep
+    /// <param name="steps">
+    /// </param>
+    public CompositeStep(params IStep[] steps)
     {
-        private readonly IList<IStep> _steps;
+        _steps = steps;
+    }
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="CompositeStep"/> class. 
-        /// Create a <see cref="CompositeStep"/> that acts as a
-        /// Composition of <see cref="IStep"/> implementations
-        /// </summary>
-        /// <param name="steps">
-        /// </param>
-        public CompositeStep(params IStep[] steps)
+    /// <summary>
+    /// Send message through the Use Case
+    /// </summary>
+    /// <param name="messagingContext"></param>
+    /// <returns></returns>
+    /// <param name="cancellation"></param>
+    public async Task<StepResult> ExecuteAsync(MessagingContext messagingContext, CancellationToken cancellation)
+    {
+        var messageToSend = messagingContext;
+        var result = await StepResult.SuccessAsync(messageToSend);
+
+        foreach (var step in _steps)
         {
-            if (steps == null)
+            result = await step.ExecuteAsync(messageToSend, cancellation);
+
+            if (result.MessagingContext != null)
             {
-                throw new ArgumentNullException(nameof(steps));
+                messageToSend = result.MessagingContext;
             }
 
-            _steps = steps;
-        }
-
-        /// <summary>
-        /// Send message through the Use Case
-        /// </summary>
-        /// <param name="messagingContext"></param>
-        /// <returns></returns>
-        public async Task<StepResult> ExecuteAsync(MessagingContext messagingContext)
-        {
-            MessagingContext messageToSend = messagingContext;
-            StepResult result = StepResult.Success(messageToSend);
-
-            foreach (IStep step in _steps)
+            if (!result.CanProceed)
             {
-                result = await step.ExecuteAsync(messageToSend).ConfigureAwait(false);
-
-                if (result.MessagingContext != null)
-                {
-                    messageToSend = result.MessagingContext;
-                }
-
-                if (!result.CanProceed)
-                {
-                    break;
-                }
+                break;
             }
-
-            return result;
         }
+
+        return result;
     }
 }

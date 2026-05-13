@@ -1,91 +1,85 @@
-﻿using System;
-using System.IO;
-using System.Threading.Tasks;
-using Eu.EDelivery.AS4.Common;
-using Eu.EDelivery.AS4.Model.Core;
+﻿using Eu.EDelivery.AS4.Model.Core;
 using Eu.EDelivery.AS4.Model.Internal;
 using Eu.EDelivery.AS4.Transformers;
 using Eu.EDelivery.AS4.UnitTests.Extensions;
-using Xunit;
 using static Eu.EDelivery.AS4.UnitTests.Properties.Resources;
 
-namespace Eu.EDelivery.AS4.UnitTests.Transformers
+namespace Eu.EDelivery.AS4.UnitTests.Transformers;
+
+/// <summary>
+/// Testing the <see cref="AS4MessageTransformer" />
+/// </summary>
+public class GivenAS4MessageTransformerFacts
 {
     /// <summary>
-    /// Testing the <see cref="AS4MessageTransformer" />
+    /// Testing if the Transformer succeeds
+    /// for the "Transform" Method
     /// </summary>
-    public class GivenAS4MessageTransformerFacts
+    public class GivenValidReceivedMessageToTransformer : GivenAS4MessageTransformerFacts
     {
-        /// <summary>
-        /// Testing if the Transformer succeeds
-        /// for the "Transform" Method
-        /// </summary>
-        public class GivenValidReceivedMessageToTransformer : GivenAS4MessageTransformerFacts
+        [Fact]
+        public async Task ThenTransfromSuceedsWithAS4Message()
         {
-            [Fact]
-            public async Task ThenTransfromSuceedsWithAS4Message()
-            {
-                // Arrange
-                const string contentType = "multipart/related; boundary=\"=-PHQq1fuE9QxpIWax7CKj5w==\"; type=\"application/soap+xml\"; charset=\"utf-8\"";
+            // Arrange
+            const string ContentType = "multipart/related; boundary=\"=-PHQq1fuE9QxpIWax7CKj5w==\"; type=\"application/soap+xml\"; charset=\"utf-8\"";
 
-                // Act
-                MessagingContext context = await ExerciseTransform(as4_single_payload, contentType);
+            // Act
+            var context = await ExerciseTransform(as4_single_payload, ContentType);
 
-                // Assert
-                Assert.NotNull(context?.AS4Message);
+            // Assert
+            Assert.NotNull(context?.AS4Message);
 
-                // TearDown
-                context.Dispose();
-            }
-
-            private async Task<MessagingContext> ExerciseTransform(byte[] contents, string contentType)
-            {
-                var stream = new MemoryStream(contents);
-                var receivedMessage = new ReceivedMessage(stream, contentType);
-
-                return await Transform(receivedMessage);
-            }
+            // TearDown
+            context.Dispose();
         }
 
-        /// <summary>
-        /// Testing if the Transformer fails
-        /// for the "Transform" Method
-        /// </summary>
-        public class GivenInvalidArgumentsToTransfrormer : GivenAS4MessageTransformerFacts
+        private static async Task<MessagingContext> ExerciseTransform(byte[] contents, string contentType)
         {
-            [Fact]
-            public async Task ThenTransformFailsWithInvalidUserMessageWithSoapAS4StreamAsync()
-            {
-                // Arrange
-                AS4Message as4Message = CreateAS4MessageWithoutAttachments();
-                as4Message.AddMessageUnit(new UserMessage("message-id"));
-                MemoryStream memoryStream = as4Message.ToStream();
+            var stream = new MemoryStream(contents);
+            var receivedMessage = new ReceivedMessage(stream, contentType);
 
-                var receivedMessage = new ReceivedMessage(memoryStream, Constants.ContentTypes.Mime);
+            return await Transform(receivedMessage);
+        }
+    }
 
-                // Act / Assert
-                await Assert.ThrowsAnyAsync<Exception>(() => Transform(receivedMessage));
-            }
+    /// <summary>
+    /// Testing if the Transformer fails
+    /// for the "Transform" Method
+    /// </summary>
+    public class GivenInvalidArgumentsToTransfrormer : GivenAS4MessageTransformerFacts
+    {
+        [Fact]
+        public async Task ThenTransformFailsWithInvalidUserMessageWithSoapAS4StreamAsync()
+        {
+            // Arrange
+            var as4Message = CreateAS4MessageWithoutAttachments();
+            as4Message.AddMessageUnit(new UserMessage("message-id"));
+            var memoryStream = as4Message.ToStream();
 
-            [Fact]
-            public async Task ThenTransformFails_IfContentIsNotSupported()
-            {
-                // Arrange
-                var saboteurMessage = new ReceivedMessage(Stream.Null, "not-supported-content-type");
+            var receivedMessage = new ReceivedMessage(memoryStream, Constants.ContentTypes.Mime);
 
-                // Act / Assert
-                await Assert.ThrowsAnyAsync<Exception>(() => Transform(saboteurMessage));
-            }
+            // Act / Assert
+            await Assert.ThrowsAnyAsync<Exception>(() => Transform(receivedMessage));
+        }
 
-            [Fact]
-            public async Task ThenTransformFails_IfRequestStreamIsNull()
-            {
-                // Arrange
-                var saboteurMessage = new ReceivedMessage(underlyingStream: Stream.Null);
+        [Fact]
+        public async Task ThenTransformFailsIfContentIsNotSupported()
+        {
+            // Arrange
+            var saboteurMessage = new ReceivedMessage(Stream.Null, "not-supported-content-type");
 
-                // Act / Assert
-                await Assert.ThrowsAnyAsync<Exception>(() => Transform(saboteurMessage));
-            }
+            // Act / Assert
+            await Assert.ThrowsAnyAsync<Exception>(() => Transform(saboteurMessage));
+        }
+
+        [Fact]
+        public async Task ThenTransformFailsIfRequestStreamIsNull()
+        {
+            // Arrange
+            var saboteurMessage = new ReceivedMessage(underlyingStream: Stream.Null);
+
+            // Act / Assert
+            await Assert.ThrowsAnyAsync<Exception>(() => Transform(saboteurMessage));
         }
 
         private static AS4Message CreateAS4MessageWithoutAttachments()
@@ -97,11 +91,11 @@ namespace Eu.EDelivery.AS4.UnitTests.Transformers
 
             return AS4Message.Create(userMessage);
         }
+    }
 
-        protected async Task<MessagingContext> Transform(ReceivedMessage message)
-        {
-            var transformer = new AS4MessageTransformer();
-            return await transformer.TransformAsync(message);
-        }
+    protected static async Task<MessagingContext> Transform(ReceivedMessage message)
+    {
+        var transformer = new AS4MessageTransformer(Default.SerializerProvider);
+        return await transformer.TransformAsync(message, CancellationToken.None);
     }
 }

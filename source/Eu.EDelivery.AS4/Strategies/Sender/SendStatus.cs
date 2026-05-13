@@ -1,48 +1,47 @@
 ﻿using System.Net;
 
-namespace Eu.EDelivery.AS4.Strategies.Sender
+namespace Eu.EDelivery.AS4.Strategies.Sender;
+
+public enum SendResult
 {
-    public enum SendResult
+    Success,
+    RetryableFail,
+    FatalFail
+}
+
+public static class SendResultUtils
+{
+    public static SendResult Reduce(SendResult x, SendResult y)
     {
-        Success,
-        RetryableFail,
-        FatalFail
+        var bothScuccess =
+            x == SendResult.Success
+            && y == SendResult.Success;
+
+        if (bothScuccess)
+        {
+            return SendResult.Success;
+        }
+
+        return x == SendResult.FatalFail || y == SendResult.FatalFail
+            ? SendResult.FatalFail
+            : SendResult.RetryableFail;
     }
 
-    public static class SendResultUtils
+    public static SendResult DetermineSendResultFromHttpResonse(HttpStatusCode statusCode)
     {
-        public static SendResult Reduce(SendResult x, SendResult y)
+        var code = (int)statusCode;
+        if (200 <= code && code < 300)
         {
-            bool bothScuccess =
-                x == SendResult.Success
-                && y == SendResult.Success;
-
-            if (bothScuccess)
-            {
-                return SendResult.Success;
-            }
-
-            return x == SendResult.FatalFail || y == SendResult.FatalFail
-                ? SendResult.FatalFail
-                : SendResult.RetryableFail;
+            return SendResult.Success;
         }
 
-        public static SendResult DetermineSendResultFromHttpResonse(HttpStatusCode statusCode)
+        if (500 <= code && code < 600
+            || code == 408
+            || code == 429)
         {
-            var code = (int) statusCode;
-            if (200 <= code && code < 300)
-            {
-                return SendResult.Success;
-            }
-
-            if (500 <= code && code < 600
-                || code == 408
-                || code == 429)
-            {
-                return SendResult.RetryableFail;
-            }
-
-            return SendResult.FatalFail;
+            return SendResult.RetryableFail;
         }
+
+        return SendResult.FatalFail;
     }
 }

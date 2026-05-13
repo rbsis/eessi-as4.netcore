@@ -1,71 +1,69 @@
-﻿using System;
-using System.IO;
-using System.Threading.Tasks;
-using Eu.EDelivery.AS4.Streaming;
-using log4net;
-using Eu.EDelivery.AS4.Extensions;
+﻿using Eu.EDelivery.AS4.Streaming;
+using Microsoft.Extensions.Logging;
 
-namespace Eu.EDelivery.AS4.Strategies.Retriever
+namespace Eu.EDelivery.AS4.Strategies.Retriever;
+
+/// <summary>
+/// Temporary <see cref="IPayloadRetriever"/> implementation that removes the file after retrieving.
+/// </summary>
+/// <seealso cref="IPayloadRetriever" />
+public class TempFilePayloadRetriever : IPayloadRetriever
 {
-    /// <summary>
-    /// Temporary <see cref="IPayloadRetriever"/> implementation that removes the file after retrieving.
-    /// </summary>
-    /// <seealso cref="IPayloadRetriever" />
-    public class TempFilePayloadRetriever : IPayloadRetriever
+    public const string Key = "temp:///";
+
+    private readonly ILogger<TempFilePayloadRetriever> _logger;
+
+    public TempFilePayloadRetriever(ILogger<TempFilePayloadRetriever> logger)
     {
-        public const string Key = "temp:///";
+        _logger = logger;
+    }
 
-        private static readonly ILog Logger = LogManager.GetLogger( System.Reflection.MethodBase.GetCurrentMethod().DeclaringType );
+    /// <summary>
+    /// Retrieve <see cref="Stream"/> contents from a given <paramref name="location"/>.
+    /// </summary>
+    /// <param name="location">The location.</param>
+    /// <returns></returns>
+    /// <param name="cancellation"></param>
+    public async Task<Stream> RetrievePayloadAsync(string location, CancellationToken cancellation)
+    {
+        ArgumentNullException.ThrowIfNull(location);
 
-        /// <summary>
-        /// Retrieve <see cref="Stream"/> contents from a given <paramref name="location"/>.
-        /// </summary>
-        /// <param name="location">The location.</param>
-        /// <returns></returns>
-        public async Task<Stream> RetrievePayloadAsync(string location)
+        var absolutePath = location.Replace(Key, string.Empty);
+
+        var targetStr = await RetrieveTempFileContents(absolutePath, cancellation);
+        DeleteTempFile(absolutePath);
+
+        return targetStr;
+    }
+
+    private static async Task<Stream> RetrieveTempFileContents(string absolutePath, CancellationToken cancellation)
+    {
+        var virtualStr = VirtualStream.Create();
+
+        using (var fileStr = new FileStream(
+            absolutePath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read))
         {
-            if (location == null)
-            {
-                throw new ArgumentNullException(nameof(location));
-            }
-
-            string absolutePath = location.Replace(Key, string.Empty);
-
-            Stream targetStr = await RetrieveTempFileContents(absolutePath);
-            DeleteTempFile(absolutePath);
-
-            return targetStr;
+            await fileStr.CopyToAsync(virtualStr, cancellation);
         }
 
-        private static async Task<Stream> RetrieveTempFileContents(string absolutePath)
+        virtualStr.Position = 0;
+        return virtualStr;
+    }
+
+    private void DeleteTempFile(string absolutePath)
+    {
+        try
         {
-            var virtualStr = VirtualStream.Create();
-
-            using (var fileStr = new FileStream(
-                absolutePath, 
-                FileMode.Open, 
-                FileAccess.Read, 
-                FileShare.Read))
-            {
-                await fileStr.CopyToFastAsync(virtualStr);
-            }
-
-            virtualStr.Position = 0;
-            return virtualStr;
+            _logger.LogTrace("Removing temporary file at location: {AbsolutePath}", absolutePath);
+            File.Delete(absolutePath);
+            _logger.LogTrace("Temporary file {AbsolutePath} removed.", absolutePath);
         }
-
-        private static void DeleteTempFile(string absolutePath)
+        catch (Exception ex)
         {
-            try
-            {
-                Logger.Trace($"Removing temporary file at location: {absolutePath}");
-                File.Delete(absolutePath);
-                Logger.Trace($"Temporary file {absolutePath} removed.");
-            }
-            catch (Exception ex)
-            {
-                Logger.Error(ex);
-            }
+            _logger.LogError(ex, "Delete temporary file failed");
         }
     }
 }

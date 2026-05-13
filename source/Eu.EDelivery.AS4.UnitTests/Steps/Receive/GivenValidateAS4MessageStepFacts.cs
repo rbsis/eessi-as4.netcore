@@ -1,132 +1,127 @@
-﻿using System;
-using System.IO;
-using System.Threading.Tasks;
-using Eu.EDelivery.AS4.Exceptions;
+﻿using Eu.EDelivery.AS4.Exceptions;
 using Eu.EDelivery.AS4.Model.Core;
 using Eu.EDelivery.AS4.Model.Internal;
-using Eu.EDelivery.AS4.Serialization;
 using Eu.EDelivery.AS4.Steps;
 using Eu.EDelivery.AS4.Steps.Receive;
-using Xunit;
+using Microsoft.Extensions.Logging.Abstractions;
 using static Eu.EDelivery.AS4.UnitTests.Properties.Resources;
 
-namespace Eu.EDelivery.AS4.UnitTests.Steps.Receive
+namespace Eu.EDelivery.AS4.UnitTests.Steps.Receive;
+
+public class GivenValidateAS4MessageStepFacts
 {
-    public class GivenValidateAS4MessageStepFacts
+    [Fact]
+    public async Task ValidationFailureIfExternalPayloadReference()
     {
-        [Fact]
-        public async Task ValidationFailure_IfExternalPayloadReference()
-        {
-            // Arrange
-            var attachment = new Attachment("earth", Stream.Null, "text/plain");
-            var user = new UserMessage(
-                $"user-{Guid.NewGuid()}",
-                new PartInfo("earth"));
+        // Arrange
+        var attachment = new Attachment("earth", Stream.Null, "text/plain");
+        var user = new UserMessage(
+            $"user-{Guid.NewGuid()}",
+            new PartInfo("earth"));
 
-            AS4Message message = AS4Message.Create(user);
-            message.AddAttachment(attachment);
-            message = await SerializeDeserialize(message);
+        var message = AS4Message.Create(user);
+        message.AddAttachment(attachment);
+        message = await SerializeDeserialize(message);
 
-            // Act
-            StepResult result = await ExerciseValidation(message);
+        // Act
+        var result = await ExerciseValidation(message);
 
-            // Assert
-            Assert.False(result.Succeeded);
-            Assert.Equal(ErrorCode.Ebms0011, result.MessagingContext.ErrorResult.Code);
-        }
+        // Assert
+        Assert.False(result.Succeeded);
+        Assert.NotNull(result.MessagingContext.ErrorResult);
+        Assert.Equal(ErrorCode.Ebms0011, result.MessagingContext.ErrorResult.Code);
+    }
 
-        [Fact]
-        public async Task ValidationFailure_IfNoAttachmentCanBeFoundForEachPartInfo()
-        {
-            // Arrange
-            var attachment = new Attachment("earth", Stream.Null, "text/plain");
-            var user = new UserMessage($"user-{Guid.NewGuid()}", new PartInfo("cid:some other href"));
-            AS4Message message = AS4Message.Create(user);
-            message.AddAttachment(attachment);
-            message = await SerializeDeserialize(message);
+    [Fact]
+    public async Task ValidationFailureIfNoAttachmentCanBeFoundForEachPartInfo()
+    {
+        // Arrange
+        var attachment = new Attachment("earth", Stream.Null, "text/plain");
+        var user = new UserMessage($"user-{Guid.NewGuid()}", new PartInfo("cid:some other href"));
+        var message = AS4Message.Create(user);
+        message.AddAttachment(attachment);
+        message = await SerializeDeserialize(message);
 
-            // Act
-            StepResult result = await ExerciseValidation(message);
+        // Act
+        var result = await ExerciseValidation(message);
 
-            // Assert
-            Assert.False(result.Succeeded);
-            Assert.Equal(ErrorCode.Ebms0009, result.MessagingContext.ErrorResult.Code);
-        }
+        // Assert
+        Assert.False(result.Succeeded);
+        Assert.NotNull(result.MessagingContext.ErrorResult);
+        Assert.Equal(ErrorCode.Ebms0009, result.MessagingContext.ErrorResult.Code);
+    }
 
-        [Fact]
-        public async Task ValidationFailure_IfSoapBodyAttachmentFound()
-        {
-            const string contentType = "application/soap+xml";
-            AS4Message message = await BuildMessageFor(as4_soapattachment, contentType);
+    [Fact]
+    public async Task ValidationFailureIfSoapBodyAttachmentFound()
+    {
+        const string ContentType = "application/soap+xml";
+        var message = await BuildMessageFor(as4_soapattachment, ContentType);
 
-            StepResult result = await ExerciseValidation(message);
+        var result = await ExerciseValidation(message);
 
-            Assert.False(result.Succeeded);
-            Assert.Equal(ErrorAlias.FeatureNotSupported, result.MessagingContext.ErrorResult.Alias);
-        }
+        Assert.False(result.Succeeded);
+        Assert.NotNull(result.MessagingContext.ErrorResult);
+        Assert.Equal(ErrorAlias.FeatureNotSupported, result.MessagingContext.ErrorResult.Alias);
+    }
 
-        [Fact]
-        public async Task ValidationSucceeds_IfSoapBodyHasNoAttachment()
-        {
-            const string contentType = "multipart/related; boundary=\"=-M9awlqbs/xWAPxlvpSWrAg==\"; type=\"application/soap+xml\"; charset=\"utf-8\"";
-            AS4Message message = await BuildMessageFor(System.Text.Encoding.UTF8.GetBytes(as4message), contentType);
+    [Fact]
+    public async Task ValidationSucceedsIfSoapBodyHasNoAttachment()
+    {
+        const string ContentType = "multipart/related; boundary=\"=-M9awlqbs/xWAPxlvpSWrAg==\"; type=\"application/soap+xml\"; charset=\"utf-8\"";
+        var message = await BuildMessageFor(System.Text.Encoding.UTF8.GetBytes(as4message), ContentType);
 
-            StepResult result = await ExerciseValidation(message);
+        var result = await ExerciseValidation(message);
 
-            Assert.True(result.Succeeded);
-        }
+        Assert.True(result.Succeeded);
+    }
 
-        [Fact]
-        public async Task ValidationFailure_IfUserMessageContainsDuplicatePayloadIds()
-        {
-            var user = new UserMessage(
-                $"user-{Guid.NewGuid()}",
-                CollaborationInfo.DefaultTest,
-                Party.DefaultFrom,
-                Party.DefaultTo,
-                new[]
-                {
-                    new PartInfo("cid:earth1"),
-                    new PartInfo("cid:earth2"),
-                },
-                new MessageProperty[0]);
-            
-            AS4Message message = AS4Message.Create(user);
-            message.AddAttachment(new Attachment("earth1", Stream.Null, "text/plain"));
-            message = await SerializeDeserialize(message);
+    [Fact]
+    public async Task ValidationFailureIfUserMessageContainsDuplicatePayloadIds()
+    {
+        var user = new UserMessage(
+            $"user-{Guid.NewGuid()}",
+            CollaborationInfo.DefaultTest,
+            Party.DefaultFrom,
+            Party.DefaultTo,
+            [
+                new PartInfo("cid:earth1"),
+                new PartInfo("cid:earth2"),
+            ],
+            []);
 
-            StepResult result = await ExerciseValidation(message);
+        var message = AS4Message.Create(user);
+        message.AddAttachment(new Attachment("earth1", Stream.Null, "text/plain"));
+        message = await SerializeDeserialize(message);
 
-            Assert.False(result.Succeeded);
-            Assert.Equal(ErrorAlias.InvalidHeader, result.MessagingContext.ErrorResult.Alias);
-        }
+        var result = await ExerciseValidation(message);
 
-        private static async Task<AS4Message> SerializeDeserialize(AS4Message message)
-        {
-            var serializer = new MimeMessageSerializer(new SoapEnvelopeSerializer());
+        Assert.False(result.Succeeded);
+        Assert.NotNull(result.MessagingContext.ErrorResult);
+        Assert.Equal(ErrorAlias.InvalidHeader, result.MessagingContext.ErrorResult.Alias);
+    }
 
-            var memory = new MemoryStream();
-            serializer.Serialize(message, memory);
-            memory.Position = 0;
+    private static async Task<AS4Message> SerializeDeserialize(AS4Message message)
+    {
+        var serializer = Default.MimeMessageSerializer;
 
-            return await serializer.DeserializeAsync(memory, message.ContentType);
-        }
+        var memory = new MemoryStream();
+        await serializer.SerializeAsync(message, memory, CancellationToken.None);
+        memory.Position = 0;
 
-        private static async Task<AS4Message> BuildMessageFor(byte[] as4MessageExternalPayloads, string contentType)
-        {
-            using (var stream = new MemoryStream(as4MessageExternalPayloads))
-            {
-                var serializer = new MimeMessageSerializer(new SoapEnvelopeSerializer());
-                return await serializer.DeserializeAsync(stream, contentType);
-            }
-        }
+        return await serializer.DeserializeAsync(memory, message.ContentType, CancellationToken.None);
+    }
 
-        private static async Task<StepResult> ExerciseValidation(AS4Message message)
-        {
-            var sut = new ValidateAS4MessageStep();
+    private static async Task<AS4Message> BuildMessageFor(byte[] as4MessageExternalPayloads, string contentType)
+    {
+        using var stream = new MemoryStream(as4MessageExternalPayloads);
+        return await Default.MimeMessageSerializer.DeserializeAsync(stream, contentType, CancellationToken.None);
+    }
 
-            return await sut.ExecuteAsync(new MessagingContext(message, MessagingContextMode.Receive));
-        }
+    private static async Task<StepResult> ExerciseValidation(AS4Message message)
+    {
+        var sut = new ValidateAS4MessageStep(NullLogger<ValidateAS4MessageStep>.Instance);
+
+        return await sut.ExecuteAsync(new MessagingContext(message, MessagingContextMode.Receive), CancellationToken.None);
     }
 }
 

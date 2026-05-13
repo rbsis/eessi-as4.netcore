@@ -1,31 +1,26 @@
-﻿using System;
+﻿namespace Eu.EDelivery.AS4.Security.Signing;
 
-namespace Eu.EDelivery.AS4.Security.Signing
+/// <summary>
+/// Wrapper for the Header and Body Signing ID Information
+/// </summary>
+public class SigningId
 {
-    /// <summary>
-    /// Wrapper for the Header and Body Signing ID Information
-    /// </summary>
-    public class SigningId
+    public string HeaderSecurityId { get; } = $"header-{Guid.NewGuid()}";
+
+    public string BodySecurityId { get; } = $"body-{Guid.NewGuid()}";
+
+    public SigningId() { }
+
+    public SigningId(string? headerSecurityId, string? bodySecurityId)
     {
-        public string HeaderSecurityId { get; } = $"header-{Guid.NewGuid()}";
-
-        public string BodySecurityId { get; } = $"body-{Guid.NewGuid()}";
-
-        public string SamlSecurityId { get; } = $"soapheader-2";
-
-        public SigningId() { }
-
-        public SigningId(string headerSecurityId, string bodySecurityId)
+        if (!string.IsNullOrWhiteSpace(headerSecurityId))
         {
-            if (!String.IsNullOrWhiteSpace(headerSecurityId))
-            {
-                HeaderSecurityId = headerSecurityId;
-            }
+            HeaderSecurityId = headerSecurityId;
+        }
 
-            if (!String.IsNullOrWhiteSpace(bodySecurityId))
-            {
-                BodySecurityId = bodySecurityId;
-            }
+        if (!string.IsNullOrWhiteSpace(bodySecurityId))
+        {
+            BodySecurityId = bodySecurityId;
         }
     }
 }

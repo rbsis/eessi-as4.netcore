@@ -1,111 +1,63 @@
-﻿using System;
-using System.ComponentModel;
-using System.Linq;
-using System.Threading.Tasks;
-using Eu.EDelivery.AS4.Common;
+﻿using System.ComponentModel;
 using Eu.EDelivery.AS4.Model.Core;
 using Eu.EDelivery.AS4.Model.Internal;
-using Eu.EDelivery.AS4.Repositories;
 using Eu.EDelivery.AS4.Services;
-using Microsoft.EntityFrameworkCore;
-using log4net;
-using Eu.EDelivery.AS4.Extensions;
+using Microsoft.Extensions.Logging;
 
-namespace Eu.EDelivery.AS4.Steps.Receive
+namespace Eu.EDelivery.AS4.Steps.Receive;
+
+[Info("Update the received AS4 Message")]
+[Description("Updates the AS4 Message that has been received after processing so that it can be delivered or forwarded")]
+public class UpdateReceivedAS4MessageBodyStep : IStep
 {
-    [Info("Update the received AS4 Message")]
-    [Description("Updates the AS4 Message that has been received after processing so that it can be delivered or forwarded")]
-    public class UpdateReceivedAS4MessageBodyStep : IStep
+    private readonly ILogger<UpdateReceivedAS4MessageBodyStep> _logger;
+    private readonly IInMessageService _inMessageService;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="UpdateReceivedAS4MessageBodyStep" /> class.
+    /// </summary>
+    public UpdateReceivedAS4MessageBodyStep(
+        ILogger<UpdateReceivedAS4MessageBodyStep> logger,
+        IInMessageService inMessageService)
     {
-        private static readonly ILog Logger = LogManager.GetLogger( System.Reflection.MethodBase.GetCurrentMethod().DeclaringType );
+        _logger = logger;
+        _inMessageService = inMessageService;
+    }
 
-        private readonly IConfig _configuration;
-        private readonly Func<DatastoreContext> _createDatastoreContext;
-        private readonly IAS4MessageBodyStore _messageBodyStore;
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="UpdateReceivedAS4MessageBodyStep"/> class.
-        /// </summary>
-        public UpdateReceivedAS4MessageBodyStep() 
-            : this(
-                Config.Instance,
-                Registry.Instance.CreateDatastoreContext, 
-                Registry.Instance.MessageBodyStore) { }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="UpdateReceivedAS4MessageBodyStep" /> class.
-        /// </summary>
-        /// <param name="configuration">The configuration used to save the message</param>
-        /// <param name="createDatastoreContext">The create Datastore Context.</param>
-        /// <param name="messageBodyStore">The <see cref="IAS4MessageBodyStore" /> that must be used to persist the messagebody content.</param>
-        public UpdateReceivedAS4MessageBodyStep(
-            IConfig configuration,
-            Func<DatastoreContext> createDatastoreContext,
-            IAS4MessageBodyStore messageBodyStore)
+    /// <summary>
+    /// Execute the step for a given <paramref name="messagingContext"/>.
+    /// </summary>
+    /// <param name="messagingContext">Message used during the step execution.</param>
+    /// <returns></returns>
+    /// <param name="cancellation"></param>
+    public async Task<StepResult> ExecuteAsync(MessagingContext messagingContext, CancellationToken cancellation)
+    {
+        if (messagingContext?.AS4Message == null)
         {
-            if (configuration == null)
-            {
-                throw new ArgumentNullException(nameof(configuration));
-            }
-
-            if (createDatastoreContext == null)
-            {
-                throw new ArgumentNullException(nameof(createDatastoreContext));
-            }
-
-            if (messageBodyStore == null)
-            {
-                throw new ArgumentNullException(nameof(messageBodyStore));
-            }
-
-            _configuration = configuration;
-            _createDatastoreContext = createDatastoreContext;
-            _messageBodyStore = messageBodyStore;
+            throw new InvalidOperationException(
+                $"{nameof(UpdateReceivedAS4MessageBodyStep)} requires an AS4Message to update but no AS4Message is present in the MessagingContext");
         }
 
-        /// <summary>
-        /// Execute the step for a given <paramref name="messagingContext"/>.
-        /// </summary>
-        /// <param name="messagingContext">Message used during the step execution.</param>
-        /// <returns></returns>
-        public async Task<StepResult> ExecuteAsync(MessagingContext messagingContext)
+        _logger.LogTrace("Updating the received message body...");
+        _inMessageService.UpdateAS4MessageForMessageHandling(
+            messagingContext.AS4Message,
+            messagingContext.SendingPMode,
+            messagingContext.ReceivingPMode);
+
+
+        if (messagingContext.ReceivedMessageMustBeForwarded)
         {
-            if (messagingContext?.AS4Message == null)
-            {
-                throw new InvalidOperationException(
-                    $"{nameof(UpdateReceivedAS4MessageBodyStep)} requires an AS4Message to update but no AS4Message is present in the MessagingContext");
-            }
+            // When the Message has to be forwarded, the remaining Steps must not be executed.
+            // The MSH must answer with a HTTP Accepted status-code, so an empty context must be returned.
+            messagingContext.ModifyContext(AS4Message.Empty);
 
-            Logger.Trace("Updating the received message body...");
-            using (DatastoreContext datastoreContext = _createDatastoreContext())
-            {
-                var repository = new DatastoreRepository(datastoreContext);
-                var service = new InMessageService(_configuration, repository);
+            _logger.LogInformation(
+                "Stops execution to return empty SOAP envelope to the orignal sender. " +
+                "This happens when the message must be forwarded");
 
-                service.UpdateAS4MessageForMessageHandling(
-                    messagingContext.AS4Message,
-                    messagingContext.SendingPMode,
-                    messagingContext.ReceivingPMode,
-                    _messageBodyStore);
-
-                await datastoreContext.SaveChangesAsync().ConfigureAwait(false);
-                messagingContext.InMessage = datastoreContext.InMessages.AsNoTracking().FirstOrDefault(p => p.EbmsMessageId == messagingContext.EbmsMessageId);
-            }
-
-            if (messagingContext.ReceivedMessageMustBeForwarded)
-            {
-                // When the Message has to be forwarded, the remaining Steps must not be executed.
-                // The MSH must answer with a HTTP Accepted status-code, so an empty context must be returned.
-                messagingContext.ModifyContext(AS4Message.Empty);
-
-                Logger.Info(
-                    "Stops execution to return empty SOAP envelope to the orignal sender. " +
-                    "This happens when the message must be forwarded");
-
-                return StepResult.Success(messagingContext).AndStopExecution();
-            }
-
-            return StepResult.Success(messagingContext);
+            return (await StepResult.SuccessAsync(messagingContext)).AndStopExecution();
         }
+
+        return await StepResult.SuccessAsync(messagingContext);
     }
 }

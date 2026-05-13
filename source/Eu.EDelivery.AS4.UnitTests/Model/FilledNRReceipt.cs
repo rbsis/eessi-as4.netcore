@@ -1,25 +1,23 @@
-﻿using System;
-using System.Collections.Generic;
-using Eu.EDelivery.AS4.Model.Core;
+﻿using Eu.EDelivery.AS4.Model.Core;
 
-namespace Eu.EDelivery.AS4.UnitTests.Model
+namespace Eu.EDelivery.AS4.UnitTests.Model;
+
+public class FilledNRReceipt : Receipt
 {
-    public class FilledNRReceipt : Receipt
-    {
-        /// <summary>
-        /// Initializes a new instance of the <see cref="FilledNRReceipt"/> class.
-        /// </summary>
-        public FilledNRReceipt()
-            : base(
-                "ignored-id",
-                "ref-to-message-id",
-                new NonRepudiationInformation(new []
-                {
-                    new Reference(
-                        "ignored URI",
-                        new List<ReferenceTransform> { new ReferenceTransform("ignored algorithm") },
-                        new ReferenceDigestMethod("ignored algorithm"),
-                        digestValue: new byte[0])
-                })) { }
-    }
+    /// <summary>
+    /// Initializes a new instance of the <see cref="FilledNRReceipt"/> class.
+    /// </summary>
+    public FilledNRReceipt()
+        : base(
+            "ignored-id",
+            "ref-to-message-id",
+            new NonRepudiationInformation(
+            [
+                new Reference(
+                    "ignored URI",
+                    [new("ignored algorithm")],
+                    new ReferenceDigestMethod("ignored algorithm"),
+                    digestValue: [])
+            ]))
+    { }
 }

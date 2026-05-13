@@ -1,136 +1,134 @@
 ﻿using Eu.EDelivery.AS4.Model.Common;
-using Xunit;
 
-namespace Eu.EDelivery.AS4.UnitTests.Model.SubmitModel
+namespace Eu.EDelivery.AS4.UnitTests.Model.SubmitModel;
+
+/// <summary>
+/// Testing <see cref="Agreement" />
+/// </summary>
+public class GivenAgreementFacts
 {
-    /// <summary>
-    /// Testing <see cref="Agreement" />
-    /// </summary>
-    public class GivenAgreementFacts
+    public class GivenValidArguments : GivenAgreementFacts
     {
-        public class GivenValidArguments : GivenAgreementFacts
+        [Theory]
+        [InlineData("shared-value", "shared-type", "shared-pmode-id")]
+        public void ThenTwoAgreementsAreEqual(string sharedValue, string sharedType, string sharedPModeId)
         {
-            [Theory]
-            [InlineData("shared-value", "shared-type", "shared-pmode-id")]
-            public void ThenTwoAgreementsAreEqual(string sharedValue, string sharedType, string sharedPModeId)
-            {
-                // Arrange
-                Agreement agreementA = CreateAgreement(sharedValue, sharedType, sharedPModeId);
-                Agreement agreementB = agreementA;
+            // Arrange
+            var agreementA = CreateAgreement(sharedValue, sharedType, sharedPModeId);
+            var agreementB = agreementA;
 
-                // Act
-                bool isEqual = agreementA.Equals(agreementB);
+            // Act
+            var isEqual = agreementA.Equals(agreementB);
 
-                // Assert
-                Assert.True(isEqual);
-            }
-
-            [Theory]
-            [InlineData("shared-value", "shared-type", "shared-pmode-id")]
-            public void ThenTwoAgreementsAreEqualForObject(string sharedValue, string sharedType, string sharedPModeId)
-            {
-                // Arrange
-                Agreement agreementA = CreateAgreement(sharedValue, sharedType, sharedPModeId);
-                Agreement agreementB = CreateAgreement(sharedValue, sharedType, sharedPModeId);
-
-                // Act
-                bool isEqual = agreementA.Equals((object)agreementB);
-
-                // Assert
-                Assert.True(isEqual);
-            }
-
-            [Theory]
-            [InlineData("shared-value", "shared-type", "shared-pmode-id")]
-            public void ThenTwoAgreementsAreEqualForProperties(
-                string sharedValue,
-                string sharedType,
-                string sharedPModeId)
-            {
-                // Arrange
-                Agreement agreementA = CreateAgreement(sharedValue, sharedType, sharedPModeId);
-                Agreement agreementB = CreateAgreement(sharedValue, sharedType, sharedPModeId);
-
-                // Act
-                bool isEqual = agreementA.Equals(agreementB);
-
-                // Assert
-                Assert.True(isEqual);
-            }
-
-            [Theory]
-            [InlineData("shared-value", "shared-type", "shared-pmode-id")]
-            public void ThenTwoAgreementsAreNotEqualForPModeid(
-                string sharedValue,
-                string sharedType,
-                string sharedPModeId)
-            {
-                // Arrange
-                Agreement agreementA = CreateAgreement(sharedValue, sharedType, sharedPModeId);
-                Agreement agreementB = CreateAgreement(sharedValue, sharedType, "not-equal");
-
-                // Act
-                bool isEqual = agreementA.Equals(agreementB);
-
-                // Assert
-                Assert.False(isEqual);
-            }
-
-            [Theory]
-            [InlineData("shared-value", "shared-type", "shared-pmode-id")]
-            public void ThenTwoAgreementsAreNotEqualForType(string sharedValue, string sharedType, string sharedPModeId)
-            {
-                // Arrange
-                Agreement agreementA = CreateAgreement(sharedValue, sharedType, sharedPModeId);
-                Agreement agreementB = CreateAgreement(sharedValue, "not-equal", sharedPModeId);
-
-                // Act
-                bool isEqual = agreementA.Equals(agreementB);
-
-                // Assert
-                Assert.False(isEqual);
-            }
-
-            [Theory]
-            [InlineData("shared-value", "shared-type", "shared-pmode-id")]
-            public void ThenTwoAgreementsAreNotEqualForValue(
-                string sharedValue,
-                string sharedType,
-                string sharedPModeId)
-            {
-                // Arrange
-                Agreement agreementA = CreateAgreement(sharedValue, sharedType, sharedPModeId);
-                Agreement agreementB = CreateAgreement("not-equal", sharedType, sharedPModeId);
-
-                // Act
-                bool isEqual = agreementA.Equals(agreementB);
-
-                // Assert
-                Assert.False(isEqual);
-            }
+            // Assert
+            Assert.True(isEqual);
         }
 
-        public class GivenInvalidAgruments : GivenAgreementFacts
+        [Theory]
+        [InlineData("shared-value", "shared-type", "shared-pmode-id")]
+        public void ThenTwoAgreementsAreEqualForObject(string sharedValue, string sharedType, string sharedPModeId)
         {
-            [Theory]
-            [InlineData("shared-value", "shared-type", "shared-pmode-id")]
-            public void ThenTwoAgreementsAreNotEqualForNull(string sharedValue, string sharedType, string sharedPModeId)
-            {
-                // Arrange
-                Agreement agreementA = CreateAgreement(sharedValue, sharedType, sharedPModeId);
-                Agreement agreementB = null;
+            // Arrange
+            var agreementA = CreateAgreement(sharedValue, sharedType, sharedPModeId);
+            var agreementB = CreateAgreement(sharedValue, sharedType, sharedPModeId);
 
-                // Act
-                bool isEqual = agreementA.Equals(agreementB);
+            // Act
+            var isEqual = agreementA.Equals((object)agreementB);
 
-                // Assert
-                Assert.False(isEqual);
-            }
+            // Assert
+            Assert.True(isEqual);
         }
 
-        protected Agreement CreateAgreement(string value, string type, string pmodeId)
+        [Theory]
+        [InlineData("shared-value", "shared-type", "shared-pmode-id")]
+        public void ThenTwoAgreementsAreEqualForProperties(
+            string sharedValue,
+            string sharedType,
+            string sharedPModeId)
         {
-            return new Agreement {Value = value, RefType = type, PModeId = pmodeId};
+            // Arrange
+            var agreementA = CreateAgreement(sharedValue, sharedType, sharedPModeId);
+            var agreementB = CreateAgreement(sharedValue, sharedType, sharedPModeId);
+
+            // Act
+            var isEqual = agreementA.Equals(agreementB);
+
+            // Assert
+            Assert.True(isEqual);
         }
+
+        [Theory]
+        [InlineData("shared-value", "shared-type", "shared-pmode-id")]
+        public void ThenTwoAgreementsAreNotEqualForPModeid(
+            string sharedValue,
+            string sharedType,
+            string sharedPModeId)
+        {
+            // Arrange
+            var agreementA = CreateAgreement(sharedValue, sharedType, sharedPModeId);
+            var agreementB = CreateAgreement(sharedValue, sharedType, "not-equal");
+
+            // Act
+            var isEqual = agreementA.Equals(agreementB);
+
+            // Assert
+            Assert.False(isEqual);
+        }
+
+        [Theory]
+        [InlineData("shared-value", "shared-type", "shared-pmode-id")]
+        public void ThenTwoAgreementsAreNotEqualForType(string sharedValue, string sharedType, string sharedPModeId)
+        {
+            // Arrange
+            var agreementA = CreateAgreement(sharedValue, sharedType, sharedPModeId);
+            var agreementB = CreateAgreement(sharedValue, "not-equal", sharedPModeId);
+
+            // Act
+            var isEqual = agreementA.Equals(agreementB);
+
+            // Assert
+            Assert.False(isEqual);
+        }
+
+        [Theory]
+        [InlineData("shared-value", "shared-type", "shared-pmode-id")]
+        public void ThenTwoAgreementsAreNotEqualForValue(
+            string sharedValue,
+            string sharedType,
+            string sharedPModeId)
+        {
+            // Arrange
+            var agreementA = CreateAgreement(sharedValue, sharedType, sharedPModeId);
+            var agreementB = CreateAgreement("not-equal", sharedType, sharedPModeId);
+
+            // Act
+            var isEqual = agreementA.Equals(agreementB);
+
+            // Assert
+            Assert.False(isEqual);
+        }
+    }
+
+    public class GivenInvalidAgruments : GivenAgreementFacts
+    {
+        [Theory]
+        [InlineData("shared-value", "shared-type", "shared-pmode-id")]
+        public void ThenTwoAgreementsAreNotEqualForNull(string sharedValue, string sharedType, string sharedPModeId)
+        {
+            // Arrange
+            var agreementA = CreateAgreement(sharedValue, sharedType, sharedPModeId);
+            Agreement? agreementB = null;
+
+            // Act
+            var isEqual = agreementA.Equals(agreementB);
+
+            // Assert
+            Assert.False(isEqual);
+        }
+    }
+
+    protected static Agreement CreateAgreement(string value, string type, string pmodeId)
+    {
+        return new Agreement { Value = value, RefType = type, PModeId = pmodeId };
     }
 }

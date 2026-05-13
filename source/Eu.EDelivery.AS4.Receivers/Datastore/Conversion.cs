@@ -1,23 +1,21 @@
-using System;
-using System.ComponentModel;
+﻿using System.ComponentModel;
 
-namespace Eu.EDelivery.AS4.Receivers.Datastore
+namespace Eu.EDelivery.AS4.Receivers.Datastore;
+
+internal static class Conversion
 {
-    internal static class Conversion
+    /// <summary>
+    /// The convert.
+    /// </summary>
+    /// <param name="targetType">The property.</param>
+    /// <param name="value">The value.</param>
+    public static object? Convert(Type targetType, string? value)
     {
-        /// <summary>
-        /// The convert.
-        /// </summary>
-        /// <param name="targetType">The property.</param>
-        /// <param name="value">The value.</param>
-        public static object Convert(Type targetType, string value)
+        if (value == null || value.Equals("NULL"))
         {
-            if (value?.Equals("NULL") == true)
-            {
-                return null;
-            }
-
-            return TypeDescriptor.GetConverter(targetType).ConvertFrom(value);
+            return null;
         }
+
+        return TypeDescriptor.GetConverter(targetType).ConvertFrom(value);
     }
 }

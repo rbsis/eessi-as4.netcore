@@ -1,21 +1,16 @@
-﻿using System.IO;
-using System.Text;
+﻿using System.Text;
 
-namespace Eu.EDelivery.AS4.PayloadService.UnitTests.Serialization
+namespace Eu.EDelivery.AS4.PayloadService.UnitTests.Serialization;
+
+/// <summary>
+/// Extensions made on a 'string'.
+/// </summary>
+public static class StringExtensions
 {
     /// <summary>
-    /// Extensions made on a 'string'.
+    /// Serialize a given string content to a stream.
     /// </summary>
-    public static class StringExtensions
-    {
-        /// <summary>
-        /// Serialize a given string content to a stream.
-        /// </summary>
-        /// <param name="content">The content.</param>
-        /// <returns></returns>
-        public static Stream AsStream(this string content)
-        {
-            return new MemoryStream(Encoding.UTF8.GetBytes(content));
-        }
-    }
+    /// <param name="content">The content.</param>
+    /// <returns></returns>
+    public static Stream AsStream(this string content) => new MemoryStream(Encoding.UTF8.GetBytes(content));
 }

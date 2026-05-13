@@ -1,184 +1,162 @@
-﻿using System;
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Configuration;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using System.Threading.Tasks;
-using Eu.EDelivery.AS4.Common;
 using Eu.EDelivery.AS4.Exceptions;
-using Eu.EDelivery.AS4.Extensions;
 using Eu.EDelivery.AS4.Model.Core;
 using Eu.EDelivery.AS4.Model.Internal;
 using Eu.EDelivery.AS4.Model.PMode;
 using Eu.EDelivery.AS4.Repositories;
 using Eu.EDelivery.AS4.Services.Journal;
-using log4net;
+using Microsoft.Extensions.Logging;
 using Org.BouncyCastle.Crypto;
 
-namespace Eu.EDelivery.AS4.Steps.Receive
+namespace Eu.EDelivery.AS4.Steps.Receive;
+
+/// <summary>
+/// The use case describes how a message gets decrypted.
+/// </summary>
+[Info("Decrypt received message")]
+[Description("Decrypts the received AS4 Message if necessary by using the specified Receiving PMode")]
+public class DecryptAS4MessageStep : IStep
 {
+    private readonly ILogger<DecryptAS4MessageStep> _logger;
+    private readonly ICertificateRepository _certificateRepository;
+
     /// <summary>
-    /// The use case describes how a message gets decrypted.
+    /// Initializes a new instance of the <see cref="DecryptAS4MessageStep"/> class.
     /// </summary>
-    [Info("Decrypt received message")]
-    [Description("Decrypts the received AS4 Message if necessary by using the specified Receiving PMode")]
-    public class DecryptAS4MessageStep : IStep
+    /// <param name="logger"></param>
+    /// <param name="certificateRepository">The certificate repository.</param>
+    public DecryptAS4MessageStep(ILogger<DecryptAS4MessageStep> logger, ICertificateRepository certificateRepository)
     {
-        private static readonly ILog Logger = LogManager.GetLogger( System.Reflection.MethodBase.GetCurrentMethod().DeclaringType );
+        _certificateRepository = certificateRepository;
+        _logger = logger;
+    }
 
-        private readonly ICertificateRepository _certificateRepository;
+    /// <summary>
+    /// Start Decrypting <see cref="AS4Message"/>
+    /// </summary>
+    /// <param name="messagingContext"></param>
+    /// <returns></returns>
+    /// <param name="cancellation"></param>
+    public async Task<StepResult> ExecuteAsync(MessagingContext messagingContext, CancellationToken cancellation)
+    {
+        ArgumentNullException.ThrowIfNull(messagingContext);
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="DecryptAS4MessageStep" /> class
-        /// Create a <see cref="IStep" /> implementation
-        /// to decrypt a <see cref="AS4Message" />
-        /// </summary>
-        public DecryptAS4MessageStep() : this(Registry.Instance.CertificateRepository) { }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="DecryptAS4MessageStep"/> class.
-        /// </summary>
-        /// <param name="certificateRepository">The certificate repository.</param>
-        public DecryptAS4MessageStep(ICertificateRepository certificateRepository)
+        if (messagingContext.AS4Message == null)
         {
-            if (certificateRepository == null)
-            {
-                throw new ArgumentNullException(nameof(certificateRepository));
-            }
-
-            _certificateRepository = certificateRepository;
+            throw new InvalidOperationException(
+                $"{nameof(DecryptAS4MessageStep)} requires a AS4Message to decrypt but no AS4Message is present in the MessagingContext");
         }
 
-        /// <summary>
-        /// Start Decrypting <see cref="AS4Message"/>
-        /// </summary>
-        /// <param name="context"></param>
-        /// <returns></returns>
-        public async Task<StepResult> ExecuteAsync(MessagingContext context)
+        if (messagingContext.AS4Message.IsSignalMessage)
         {
-            if (context == null)
-            {
-                throw new ArgumentNullException(nameof(context));
-            }
-
-            if (context.AS4Message == null)
-            {
-                throw new InvalidOperationException(
-                    $"{nameof(DecryptAS4MessageStep)} requires a AS4Message to decrypt but no AS4Message is present in the MessagingContext");
-            }
-
-            if (context.AS4Message.IsSignalMessage)
-            {
-                Logger.Debug("AS4Message is SignalMessage so will skip decryption since AS4.NET Component only supports encryption of payloads");
-                return StepResult.Success(context);
-            }
-
-            if (context.ReceivingPMode?.Security?.Decryption == null)
-            {
-                Logger.Debug("AS4Message will not be decrypted sicne ReceivingPMode hasn't got a Security.Decryption element");
-                return StepResult.Success(context);
-            }
-
-            ReceivingProcessingMode receivePMode = context.ReceivingPMode;
-            if (receivePMode.Security.Decryption.Encryption == Limit.Required && !context.AS4Message.IsEncrypted)
-            {
-                Logger.Error(
-                    $"AS4Message is not encrypted but ReceivingPMode {Config.Encode(receivePMode.Id)} requires it. "
-                    + $"{Environment.NewLine} Please alter the PMode Decryption.Encryption element to Allowed or Ignored");
-
-                context.ErrorResult = new ErrorResult("AS4Message is not encrypted but ReceivingPMode requires it", ErrorAlias.PolicyNonCompliance);
-                return StepResult.Failed(context);
-            }
-
-            if (receivePMode.Security.Decryption.Encryption == Limit.NotAllowed && context.AS4Message.IsEncrypted)
-            {
-                Logger.Error(
-                    $"AS4Message is encrypted but ReceivingPMode {Config.Encode(receivePMode.Id)} doesn't allow it. " +
-                    $"{Environment.NewLine} Please alter the PMode Decryption.Encryption element to Required, Allowed or Ignored");
-
-                context.ErrorResult = new ErrorResult("AS4Message is encrypted but ReceivingPMode doesn't allow it", ErrorAlias.PolicyNonCompliance);
-                return StepResult.Failed(context);
-            }
-
-            if (!context.AS4Message.IsEncrypted)
-            {
-                Logger.Debug("AS4Message is not encrypted so will skip decryption");
-                return StepResult.Success(context);
-            }
-
-            if (context.ReceivingPMode?.Security?.Decryption?.Encryption == Limit.Ignored)
-            {
-                Logger.Debug($"Decryption is ignored in ReceivingPMode {Config.Encode(receivePMode.Id)}, so no decryption will take place");
-                return StepResult.Success(context);
-            }
-
-            return await DecryptAS4MessageAsync(context).ConfigureAwait(false);
+            _logger.LogDebug("AS4Message is SignalMessage so will skip decryption since AS4.NET Component only supports encryption of payloads");
+            return await StepResult.SuccessAsync(messagingContext);
         }
 
-        private async Task<StepResult> DecryptAS4MessageAsync(MessagingContext messagingContext)
+        if (messagingContext.ReceivingPMode?.Security?.Decryption == null)
         {
-            try
-            {
-                Logger.Trace("Start decrypting AS4Message ...");
-                X509Certificate2 decryptionCertificate = GetCertificate(messagingContext);
-                messagingContext.AS4Message.Decrypt(decryptionCertificate);
-                Logger.Info($"{Config.Encode(messagingContext.LogTag)} AS4Message is decrypted correctly");
-
-                JournalLogEntry entry = 
-                    JournalLogEntry.CreateFrom(
-                        messagingContext.AS4Message, 
-                        $"Decrypted using certificate {decryptionCertificate.FriendlyName}");
-
-                return await StepResult
-                    .Success(messagingContext)
-                    .WithJournalAsync(entry);
-            }
-            catch (Exception ex) when (ex is CryptoException || ex is CryptographicException)
-            {
-                Logger.Error(Config.Encode(ex));
-
-                messagingContext.ErrorResult = new ErrorResult(
-                    description: "Decryption of message failed",
-                    alias: ErrorAlias.FailedDecryption);
-
-                Logger.Error(Config.Encode(messagingContext.ErrorResult.Description));
-                return StepResult.Failed(messagingContext);
-            }
+            _logger.LogDebug("AS4Message will not be decrypted sicne ReceivingPMode hasn't got a Security.Decryption element");
+            return await StepResult.SuccessAsync(messagingContext);
         }
 
-        private X509Certificate2 GetCertificate(MessagingContext messagingContext)
+        var receivePMode = messagingContext.ReceivingPMode;
+        if (receivePMode.Security.Decryption.Encryption == Limit.Required && !messagingContext.AS4Message.IsEncrypted)
         {
-            Decryption decryption = messagingContext.ReceivingPMode.Security.Decryption;
+            var message = "AS4Message is encrypted but ReceivingPMode {PModeId} doesn't allow it." + Environment.NewLine + " Please alter the PMode Decryption.Encryption element to Allowed or Ignored";
+            _logger.LogError(message, receivePMode.Id);
 
-            if (decryption.DecryptCertificateInformation == null)
-            {
-                throw new ConfigurationErrorsException(
-                    "Cannot start decrypting: no certificate information found " + 
-                    $"in ReceivingPMode {messagingContext.ReceivingPMode.Id} to decrypt the message. " +
-                    "Please use either a <CertificateFindCriteria/> or <PrivateKeyCertificate/> to specify the certificate information");
-            }
+            messagingContext.ErrorResult = new ErrorResult("AS4Message is not encrypted but ReceivingPMode requires it", ErrorAlias.PolicyNonCompliance);
+            return await StepResult.FailedAsync(messagingContext);
+        }
 
-            if (decryption.DecryptCertificateInformation is CertificateFindCriteria certFindCriteria)
-            {
-                return _certificateRepository.GetCertificate(
-                    certFindCriteria.CertificateFindType,
-                    certFindCriteria.CertificateFindValue);
-            }
+        if (receivePMode.Security.Decryption.Encryption == Limit.NotAllowed && messagingContext.AS4Message.IsEncrypted)
+        {
+            var message = "AS4Message is encrypted but ReceivingPMode {PModeId} doesn't allow it." + Environment.NewLine + " Please alter the PMode Decryption.Encryption element to Required, Allowed or Ignored";
+            _logger.LogError(message, receivePMode.Id);
 
-            if (decryption.DecryptCertificateInformation is PrivateKeyCertificate embeddedCertInfo)
-            {
-                return new X509Certificate2(
-                    rawData: Convert.FromBase64String(embeddedCertInfo.Certificate),
-                    password: embeddedCertInfo.Password,
-                    keyStorageFlags: X509KeyStorageFlags.Exportable
-                                     | X509KeyStorageFlags.MachineKeySet
-                                     | X509KeyStorageFlags.PersistKeySet);
-            }
+            messagingContext.ErrorResult = new ErrorResult("AS4Message is encrypted but ReceivingPMode doesn't allow it", ErrorAlias.PolicyNonCompliance);
+            return await StepResult.FailedAsync(messagingContext);
+        }
 
-            throw new NotSupportedException(
-                "The decrypt-certificate information specified in the ReceivingPMode " + 
-                $"{messagingContext.ReceivingPMode.Id} could not be used to retrieve the certificate used for decryption. " + 
+        if (!messagingContext.AS4Message.IsEncrypted)
+        {
+            _logger.LogDebug("AS4Message is not encrypted so will skip decryption");
+            return await StepResult.SuccessAsync(messagingContext);
+        }
+
+        if (messagingContext.ReceivingPMode?.Security?.Decryption?.Encryption == Limit.Ignored)
+        {
+            _logger.LogDebug("Decryption is ignored in ReceivingPMode {PModeId}, so no decryption will take place", receivePMode.Id);
+            return await StepResult.SuccessAsync(messagingContext);
+        }
+
+        return await DecryptAS4MessageAsync(messagingContext);
+    }
+
+    private async Task<StepResult> DecryptAS4MessageAsync(MessagingContext messagingContext)
+    {
+        try
+        {
+            _logger.LogTrace("Start decrypting AS4Message ...");
+            var decryptionCertificate = GetCertificate(messagingContext);
+            messagingContext.AS4Message!.Decrypt(decryptionCertificate);
+            _logger.LogInformation("{LogTag} AS4Message is decrypted correctly", messagingContext.LogTag);
+
+            var entry = JournalLogEntry.CreateFrom(
+                messagingContext.AS4Message,
+                $"Decrypted using certificate {decryptionCertificate.FriendlyName}");
+
+            var result = await StepResult.SuccessAsync(messagingContext);
+            _logger.LogTrace("Append log to message journal: {LogEntries}", string.Join(", ", entry.LogEntries));
+            return await result.WithJournalAsync(entry);
+        }
+        catch (Exception ex) when (ex is CryptoException || ex is CryptographicException)
+        {
+            _logger.LogError(ex, "Decryption of message failed");
+
+            messagingContext.ErrorResult = new ErrorResult(
+                description: "Decryption of message failed",
+                alias: ErrorAlias.FailedDecryption);
+            return await StepResult.FailedAsync(messagingContext);
+        }
+    }
+
+    private X509Certificate2 GetCertificate(MessagingContext messagingContext)
+    {
+        var decryption = messagingContext.ReceivingPMode!.Security.Decryption;
+
+        if (decryption.DecryptCertificateInformation == null)
+        {
+            throw new ConfigurationErrorsException(
+                "Cannot start decrypting: no certificate information found " +
+                $"in ReceivingPMode {messagingContext.ReceivingPMode.Id} to decrypt the message. " +
                 "Please use either a <CertificateFindCriteria/> or <PrivateKeyCertificate/> to specify the certificate information");
         }
+
+        if (decryption.DecryptCertificateInformation is CertificateFindCriteria certFindCriteria)
+        {
+            return _certificateRepository.GetCertificate(
+                certFindCriteria.CertificateFindType,
+                certFindCriteria.CertificateFindValue);
+        }
+
+        if (decryption.DecryptCertificateInformation is PrivateKeyCertificate embeddedCertInfo
+            && embeddedCertInfo.Certificate is not null)
+        {
+            return new X509Certificate2(
+                rawData: Convert.FromBase64String(embeddedCertInfo.Certificate),
+                password: embeddedCertInfo.Password,
+                keyStorageFlags: X509KeyStorageFlags.Exportable
+                                 | X509KeyStorageFlags.MachineKeySet
+                                 | X509KeyStorageFlags.PersistKeySet);
+        }
+
+        throw new NotSupportedException(
+            "The decrypt-certificate information specified in the ReceivingPMode " +
+            $"{messagingContext.ReceivingPMode.Id} could not be used to retrieve the certificate used for decryption. " +
+            "Please use either a <CertificateFindCriteria/> or <PrivateKeyCertificate/> to specify the certificate information");
     }
 }

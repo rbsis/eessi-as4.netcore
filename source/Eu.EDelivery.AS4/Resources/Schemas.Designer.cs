@@ -19,7 +19,7 @@ namespace Eu.EDelivery.AS4.Resources {
     // class via a tool like ResGen or Visual Studio.
     // To add or remove a member, edit your .ResX file then rerun ResGen
     // with the /str option, or rebuild your VS project.
-    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "15.0.0.0")]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "17.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     internal class Schemas {
@@ -211,9 +211,9 @@ namespace Eu.EDelivery.AS4.Resources {
         ///&lt;xs:schema xmlns:tns=&quot;urn:cef:edelivery:eu:as4:messages&quot; elementFormDefault=&quot;qualified&quot; targetNamespace=&quot;urn:cef:edelivery:eu:as4:messages&quot; xmlns:xs=&quot;http://www.w3.org/2001/XMLSchema&quot;&gt;
         ///  &lt;xs:element name=&quot;SubmitMessage&quot; nillable=&quot;true&quot; type=&quot;tns:SubmitMessage&quot; /&gt;
         ///  &lt;xs:complexType name=&quot;SubmitMessage&quot;&gt;
-        ///    &lt;xs:sequence&gt;
+        ///    &lt;xs:all&gt;
         ///      &lt;xs:element minOccurs=&quot;0&quot; maxOccurs=&quot;1&quot; name=&quot;MessageInfo&quot; type=&quot;tns:MessageInfo&quot; /&gt;
-        ///      &lt;xs:element minOccurs=&quot;0&quot; maxOccurs=&quot;1&quot; name=&quot;Pa [rest of string was truncated]&quot;;.
+        ///      &lt;xs:element minOccurs=&quot;0&quot; maxOccurs=&quot;1&quot; name=&quot;PartyIn [rest of string was truncated]&quot;;.
         /// </summary>
         internal static string submitmessage_schema {
             get {
@@ -288,6 +288,25 @@ namespace Eu.EDelivery.AS4.Resources {
         internal static string xlink {
             get {
                 return ResourceManager.GetString("xlink", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to &lt;?xml version=&apos;1.0&apos;?&gt;
+        ///&lt;!DOCTYPE xs:schema PUBLIC &quot;-//W3C//DTD XMLSCHEMA 200102//EN&quot; &quot;XMLSchema.dtd&quot; &gt;
+        ///&lt;xs:schema targetNamespace=&quot;http://www.w3.org/XML/1998/namespace&quot; xmlns:xs=&quot;http://www.w3.org/2001/XMLSchema&quot; xml:lang=&quot;en&quot;&gt;
+        ///
+        ///	&lt;xs:annotation&gt;
+        ///		&lt;xs:documentation&gt;
+        ///			See http://www.w3.org/XML/1998/namespace.html and
+        ///			http://www.w3.org/TR/REC-xml for information about this namespace.
+        ///
+        ///			This schema document describes the XML namespace, in a form
+        ///			suitable for import by other schema documents. [rest of string was truncated]&quot;;.
+        /// </summary>
+        internal static string xml {
+            get {
+                return ResourceManager.GetString("xml", resourceCulture);
             }
         }
         

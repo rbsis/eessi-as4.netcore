@@ -1,20 +1,17 @@
-﻿using System;
-using System.Linq;
-using Eu.EDelivery.AS4.Model.PMode;
+﻿using Eu.EDelivery.AS4.Model.PMode;
 
-namespace Eu.EDelivery.AS4.UnitTests.Validators
+namespace Eu.EDelivery.AS4.UnitTests.Validators;
+
+public static class ValidationOutputAssertions
 {
-    public static class ValidationOutputAssertions
+    public static bool SpecifiedMethod(Method? m)
     {
-        public static bool SpecifiedMethod(Method m)
-        {
-            bool specifiedType = !String.IsNullOrWhiteSpace(m?.Type);
-            bool specifiedParams =
-                m?.Parameters?.All(p => !String.IsNullOrWhiteSpace(p?.Name)
-                                        && !String.IsNullOrWhiteSpace(p?.Value))
-                ?? false;
+        var specifiedType = !string.IsNullOrWhiteSpace(m?.Type);
+        var specifiedParams =
+            m?.Parameters?.All(p => !string.IsNullOrWhiteSpace(p?.Name)
+                                    && !string.IsNullOrWhiteSpace(p?.Value))
+            ?? false;
 
-            return specifiedType && specifiedParams;
-        }
+        return specifiedType && specifiedParams;
     }
 }
