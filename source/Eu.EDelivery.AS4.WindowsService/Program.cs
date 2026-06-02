@@ -1,20 +1,22 @@
-﻿using System.ServiceProcess;
+﻿using Eu.EDelivery.AS4.WindowsService;
+using NLog;
+using NLog.Extensions.Logging;
 
-namespace Eu.EDelivery.AS4.WindowsService
+var builder = Host.CreateApplicationBuilder(args);
+
+// NLog: Setup NLog for Dependency injection
+LogManager.Setup().LoadConfiguration(builder =>
 {
-    static class Program
-    {
-        /// <summary>
-        /// The main entry point for the application.
-        /// </summary>
-        static void Main()
-        {
-            ServiceBase[] ServicesToRun;
-            ServicesToRun = new ServiceBase[]
-            {
-                new AS4Service()
-            };
-            ServiceBase.Run(ServicesToRun);
-        }
-    }
-}
+    builder.ForLogger().FilterMinLevel(NLog.LogLevel.Trace).WriteToColoredConsole();
+});
+
+builder.Logging.ClearProviders();
+builder.Logging.AddNLog();
+
+var startup = new Startup(builder.Configuration);
+
+startup.ConfigureServices(builder.Services);
+
+var host = builder.Build();
+
+await host.RunAsync();

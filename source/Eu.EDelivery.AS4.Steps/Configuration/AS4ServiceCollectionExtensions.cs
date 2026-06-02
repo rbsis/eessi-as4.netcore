@@ -21,9 +21,9 @@ public static class AS4ServiceCollectionExtensions
             .AddClasses(filter => filter.AssignableTo<IConfigStep>(), false)
             .AsSelf()
             .WithTransientLifetime())
+        .AddSingleton<IDefaultAgentStepRegistry, DefaultAgentStepRegistry>()
         .AddSingleton<IPModeRuleEngine, PModeRuleEngine>()
         .AddKeyedSingleton<IAS4ResponseHandler, TailResponseHandler>(typeof(TailResponseHandler))
         .AddKeyedSingleton<IAS4ResponseHandler, EmptyBodyResponseHandler>(typeof(EmptyBodyResponseHandler))
         .AddKeyedSingleton<IAS4ResponseHandler, PullRequestResponseHandler>(typeof(PullRequestResponseHandler));
-
 }

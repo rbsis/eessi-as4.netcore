@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 18
-VisualStudioVersion = 18.5.11723.231 stable
+VisualStudioVersion = 18.5.11723.231
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Eu.EDelivery.AS4", "Eu.EDelivery.AS4\Eu.EDelivery.AS4.csproj", "{8B0BA38F-C3F7-46C1-9E68-A7291C7B16B1}"
 EndProject
@@ -35,6 +35,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Eu.EDelivery.AS4.Receivers.Http", "Eu.EDelivery.AS4.Receivers.Http\Eu.EDelivery.AS4.Receivers.Http.csproj", "{3F151352-84BE-4BC2-B681-3BE8FFA0C421}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Eu.EDelivery.AS4.PayloadService.UnitTests", "Eu.EDelivery.AS4.PayloadService.UnitTests\Eu.EDelivery.AS4.PayloadService.UnitTests.csproj", "{6570BC24-B7DC-EF30-4E4F-3AD974F40C05}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Eu.EDelivery.AS4.WindowsService", "Eu.EDelivery.AS4.WindowsService\Eu.EDelivery.AS4.WindowsService.csproj", "{D1F88397-2D6C-46C5-9A88-B89CD96CF6EF}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -86,6 +88,10 @@ Global
 		{6570BC24-B7DC-EF30-4E4F-3AD974F40C05}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{6570BC24-B7DC-EF30-4E4F-3AD974F40C05}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{6570BC24-B7DC-EF30-4E4F-3AD974F40C05}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D1F88397-2D6C-46C5-9A88-B89CD96CF6EF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D1F88397-2D6C-46C5-9A88-B89CD96CF6EF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D1F88397-2D6C-46C5-9A88-B89CD96CF6EF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D1F88397-2D6C-46C5-9A88-B89CD96CF6EF}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -86,12 +86,12 @@ internal class Agent : BackgroundService, IAgent
     /// <returns></returns>
     public override async Task StartAsync(CancellationToken cancellationToken)
     {
-        _logger.LogDebug("Starting AS4 Agent {Name}...", AgentConfig.Name);
+        _logger.LogDebug("Starting {Name}...", AgentConfig.Name);
 
         await base.StartAsync(cancellationToken);
         //_receiver.StartReceiving()
 
-        _logger.LogInformation("AS4 Agent {Name} Started!", AgentConfig.Name);
+        _logger.LogInformation("{Name} Started!", AgentConfig.Name);
     }
 
     /// <summary>
@@ -101,12 +101,12 @@ internal class Agent : BackgroundService, IAgent
     /// <returns></returns>
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        _logger.LogDebug("Stopping AS4 Agent {Name} ...", AgentConfig.Name);
+        _logger.LogDebug("Stopping {Name} ...", AgentConfig.Name);
         _receiver.StopReceiving();
 
         await base.StopAsync(cancellationToken);
 
-        _logger.LogInformation("AS4 Agent {Name} stopped.", AgentConfig.Name);
+        _logger.LogInformation("{Name} stopped.", AgentConfig.Name);
     }
 
     protected async Task<MessagingContext> OnReceived(ReceivedMessage message, CancellationToken cancellation)

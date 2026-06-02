@@ -12,7 +12,7 @@ using RetryReliability = Eu.EDelivery.AS4.Entities.RetryReliability;
 
 namespace Eu.EDelivery.AS4.Agents;
 
-internal class RetryAgent : BackgroundService, IAgent
+public class RetryAgent : BackgroundService, IAgent
 {
     private readonly ILogger<RetryAgent> _logger;
     private readonly IReceiver _receiver;
@@ -26,7 +26,7 @@ internal class RetryAgent : BackgroundService, IAgent
     /// <param name="receiver">The receiver used to retrieve <see cref="RetryReliability"/> entities</param>
     /// <param name="repository"></param>
     /// <param name="inMessageService"></param>
-    internal RetryAgent(
+    public RetryAgent(
         ILogger<RetryAgent> logger,
         IReceiver receiver,
         IDatastoreRepository repository,
@@ -42,7 +42,7 @@ internal class RetryAgent : BackgroundService, IAgent
     /// Gets the agent configuration.
     /// </summary>
     /// <value>The agent configuration.</value>
-    public AgentConfig AgentConfig { get; } = new AgentConfig("Retry Agent");
+    public AgentConfig AgentConfig { get; } = new AgentConfig("Retry Agent") { Type = AgentType.Retry };
 
     /// <summary>
     /// Starts the specified agent.
@@ -51,11 +51,11 @@ internal class RetryAgent : BackgroundService, IAgent
     /// <returns></returns>
     public override Task StartAsync(CancellationToken cancellationToken)
     {
-        _logger.LogDebug("Starting AS4 RetryAgent {Name}...", AgentConfig.Name);
+        _logger.LogDebug("Starting {Name}...", AgentConfig.Name);
 
         var task = base.StartAsync(cancellationToken);
 
-        _logger.LogInformation("AS4 RetryAgent {Name} Started!", AgentConfig.Name);
+        _logger.LogInformation("{Name} Started!", AgentConfig.Name);
 
         return task;
     }
@@ -67,18 +67,18 @@ internal class RetryAgent : BackgroundService, IAgent
     /// <returns></returns>
     public override Task StopAsync(CancellationToken cancellationToken)
     {
-        _logger.LogDebug("Stopping AS4 Agent {Name} ...", AgentConfig.Name);
+        _logger.LogDebug("Stopping {Name} ...", AgentConfig.Name);
         _receiver.StopReceiving();
 
         var task = base.StopAsync(cancellationToken);
 
-        _logger.LogInformation("AS4 Agent {Name} stopped.", AgentConfig.Name);
+        _logger.LogInformation("{Name} stopped.", AgentConfig.Name);
 
         return task;
     }
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken) => Task.Factory.StartNew(
-    () => _receiver.StartReceiving(OnReceivedAsync, stoppingToken), TaskCreationOptions.LongRunning);
+        () => _receiver.StartReceiving(OnReceivedAsync, stoppingToken), TaskCreationOptions.LongRunning);
 
 
     private Task<MessagingContext> OnReceivedAsync(ReceivedMessage rm, CancellationToken ct)

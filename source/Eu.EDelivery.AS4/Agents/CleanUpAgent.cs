@@ -1,6 +1,4 @@
-﻿using System.Reactive.Concurrency;
-using System.Reactive.Linq;
-using System.Reactive.Threading.Tasks;
+﻿using Eu.EDelivery.AS4.Common;
 using Eu.EDelivery.AS4.Entities;
 using Eu.EDelivery.AS4.Strategies.Database;
 using Microsoft.EntityFrameworkCore;
@@ -13,24 +11,26 @@ namespace Eu.EDelivery.AS4.Agents;
 /// This job consists of deleting messages that are inserted older that the given retention period (local configuration settings specifies this in days).
 /// </summary>
 /// <seealso cref="IAgent" />
-internal class CleanUpAgent : IAgent
+public class CleanUpAgent : IAgent, IDisposable
 {
     private readonly ILogger<CleanUpAgent> _logger;
-
     private readonly IDbContextFactory<DatastoreContext> _contextFactory;
     private readonly TimeSpan _retentionPeriod;
+
+    private Timer? _timer = null;
+    private bool _disposedValue;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="CleanUpAgent" /> class.
     /// </summary>
     /// <param name="logger"></param>
     /// <param name="contextFactory">The context factory.</param>
-    /// <param name="retentionPeriod">The retention period.</param>
-    public CleanUpAgent(ILogger<CleanUpAgent> logger, IDbContextFactory<DatastoreContext> contextFactory, TimeSpan retentionPeriod)
+    /// <param name="config">The configuration whit the retention period.</param>
+    public CleanUpAgent(ILogger<CleanUpAgent> logger, IDbContextFactory<DatastoreContext> contextFactory, IConfig config)
     {
         _logger = logger;
         _contextFactory = contextFactory;
-        _retentionPeriod = retentionPeriod;
+        _retentionPeriod = config.RetentionPeriod;
     }
 
     /// <summary>
@@ -44,22 +44,16 @@ internal class CleanUpAgent : IAgent
     /// </summary>
     /// <param name="cancellationToken">The cancellation.</param>
     /// <returns></returns>
-    public async Task StartAsync(CancellationToken cancellationToken)
+    public Task StartAsync(CancellationToken cancellationToken)
     {
         _logger.LogTrace("Starting {Name}...", AgentConfig.Name);
         _logger.LogDebug("Will clean up entries older than: \"{RetentionPeriod}\"", DateTimeOffset.Now.Subtract(_retentionPeriod));
 
-        try
-        {
-            await Observable.Interval(TimeSpan.FromDays(1), TaskPoolScheduler.Default)
-                .StartWith(0)
-                .Do(_ => StartCleaningMessagesTables())
-                .ToTask(cancellationToken);
-        }
-        catch (TaskCanceledException ex)
-        {
-            _logger.LogError(ex, "{Name} Stopped!", AgentConfig.Name);
-        }
+        _timer = new Timer(StartCleaningMessagesTables, null, TimeSpan.Zero, TimeSpan.FromDays(1));
+
+        _logger.LogInformation("{Name} Started!", AgentConfig.Name);
+
+        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -67,25 +61,58 @@ internal class CleanUpAgent : IAgent
     /// </summary>
     public Task StopAsync(CancellationToken cancellationToken)
     {
+        _logger.LogDebug("Stopping {Name} ...", AgentConfig.Name);
+
+        _timer?.Change(Timeout.Infinite, 0);
+
+        _logger.LogInformation("{Name} stopped.", AgentConfig.Name);
+
         return Task.CompletedTask;
     }
 
-    private void StartCleaningMessagesTables()
+    private void StartCleaningMessagesTables(object? state)
     {
-        using var context = _contextFactory.CreateDbContext();
-        var allowedOperations = new[]
+        try
         {
-            Operation.Delivered,
-            Operation.Forwarded,
-            Operation.Notified,
-            Operation.Sent,
-            Operation.NotApplicable,
-            Operation.Undetermined
-        };
+            using var context = _contextFactory.CreateDbContext();
+            var allowedOperations = new[]
+            {
+                Operation.Delivered,
+                Operation.Forwarded,
+                Operation.Notified,
+                Operation.Sent,
+                Operation.NotApplicable,
+                Operation.Undetermined
+            };
 
-        foreach (var table in DatastoreTable.DomainEntityTables)
-        {
-            context.NativeCommands.BatchDeleteOverRetentionPeriod(table, _retentionPeriod, allowedOperations);
+            foreach (var table in DatastoreTable.DomainEntityTables)
+            {
+                context.NativeCommands.BatchDeleteOverRetentionPeriod(table, _retentionPeriod, allowedOperations);
+            }
         }
+        catch (TaskCanceledException ex)
+        {
+            _logger.LogError(ex, "Clean messages tables failed");
+        }
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!_disposedValue)
+        {
+            if (disposing)
+            {
+                _timer?.Dispose();
+            }
+
+            _disposedValue = true;
+        }
+    }
+
+    public void Dispose()
+    {
+        // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
     }
 }

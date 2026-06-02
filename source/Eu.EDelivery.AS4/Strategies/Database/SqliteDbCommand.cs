@@ -31,6 +31,14 @@ internal class SqliteDbCommand : IAS4DbCommand
     /// <summary>
     /// Initialization process for the different DBMS storage types.
     /// </summary>
+    public void CreateDatabase()
+    {
+        _context.Database.Migrate();
+    }
+
+    /// <summary>
+    /// Initialization process for the different DBMS storage types.
+    /// </summary>
     public async Task CreateDatabaseAsync(CancellationToken cancellation)
     {
         await _context.Database.MigrateAsync(cancellation);

@@ -5,7 +5,7 @@ using Eu.EDelivery.AS4.Model.Internal;
 
 namespace Eu.EDelivery.AS4.Receivers;
 
-public static class DefaultAgentReceiverRegistry
+internal class DefaultAgentReceiverRegistry : IDefaultAgentReceiverRegistry
 {
     private static readonly Dictionary<AgentType, Receiver> _receivers = [];
 
@@ -73,7 +73,7 @@ public static class DefaultAgentReceiverRegistry
     /// </summary>
     /// <param name="agentType"></param>
     /// <returns></returns>
-    public static Receiver GetDefaultReceiverFor(AgentType agentType)
+    public Receiver GetDefaultReceiver(AgentType agentType)
     {
         if (_receivers.TryGetValue(agentType, out var value))
         {

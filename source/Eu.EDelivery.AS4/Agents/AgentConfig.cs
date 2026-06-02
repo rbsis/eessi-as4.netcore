@@ -45,5 +45,6 @@ public enum AgentType
     PullReceive,
     PullSend,
     OutboundProcessing,
-    Forward
+    Forward,
+    Retry
 }

@@ -17,6 +17,11 @@ public interface IAS4DbCommand
     /// <summary>
     /// Initialization process for the different DBMS storage types.
     /// </summary>
+    void CreateDatabase();
+
+    /// <summary>
+    /// Initialization process for the different DBMS storage types.
+    /// </summary>
     Task CreateDatabaseAsync(CancellationToken cancellation);
 
     /// <summary>

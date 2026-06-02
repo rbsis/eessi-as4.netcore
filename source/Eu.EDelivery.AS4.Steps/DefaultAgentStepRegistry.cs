@@ -9,7 +9,7 @@ using Eu.EDelivery.AS4.Steps.Submit;
 
 namespace Eu.EDelivery.AS4.Steps;
 
-internal static class DefaultAgentStepRegistry
+internal class DefaultAgentStepRegistry : IDefaultAgentStepRegistry
 {
     private static readonly Dictionary<AgentType, StepConfiguration> _stepConfiguration = new()
     {
@@ -133,7 +133,12 @@ internal static class DefaultAgentStepRegistry
         },
     };
 
-    internal static StepConfiguration GetDefaultStepConfigurationFor(AgentType agentType)
+    /// <summary>
+    /// Gets the default implementation of the <see cref="StepConfiguration"/> for the given <paramref name="agentType"/>.
+    /// </summary>
+    /// <param name="agentType">Type of the agent.</param>
+    /// <returns></returns>
+    public StepConfiguration GetDefaultStepConfiguration(AgentType agentType)
     {
         if (!_stepConfiguration.TryGetValue(agentType, out var value))
         {

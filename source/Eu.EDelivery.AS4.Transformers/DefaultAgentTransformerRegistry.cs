@@ -3,7 +3,7 @@ using Eu.EDelivery.AS4.Model.Internal;
 
 namespace Eu.EDelivery.AS4.Transformers;
 
-public static class DefaultAgentTransformerRegistry
+internal class DefaultAgentTransformerRegistry : IDefaultAgentTransformerRegistry
 {
     private static readonly Dictionary<AgentType, TransformerConfigEntry> _registry = new()
     {
@@ -25,42 +25,46 @@ public static class DefaultAgentTransformerRegistry
 
     private static Transformer TransformerConfig(Type t) => new() { Type = t.AssemblyQualifiedName };
 
-    public static TransformerConfigEntry GetDefaultTransformerFor(AgentType agentType)
+    public Transformer GetDefaultTransformer(AgentType agentType)
     {
         if (!_registry.TryGetValue(agentType, out var value))
         {
             throw new NotSupportedException($"There is no default Transformer available for agent-type {agentType}");
         }
 
-        return value;
+        return value.DefaultTransformer;
+    }
+
+    public IEnumerable<Transformer> GetOtherTransformers(AgentType agentType)
+    {
+        if (!_registry.TryGetValue(agentType, out var value))
+        {
+            throw new NotSupportedException($"There is no default Transformer available for agent-type {agentType}");
+        }
+
+        return value.OtherTransformers;
     }
 }
 
 /// <summary>
 /// Transformer Configuration Entry to wrap the information about the different <see cref="ITransformer"/> implementations that can be used for an <see cref="AgentType"/>.
 /// </summary>
-public class TransformerConfigEntry
+/// <remarks>
+/// Initializes a new instance of the <see cref="TransformerConfigEntry" /> class.
+/// </remarks>
+/// <param name="defaultTransformer">The default transformer.</param>
+/// <param name="otherTransformers">The other transformers.</param>
+internal class TransformerConfigEntry(Transformer defaultTransformer, IEnumerable<Transformer> otherTransformers)
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="TransformerConfigEntry" /> class.
-    /// </summary>
-    /// <param name="defaultTransformer">The default transformer.</param>
-    /// <param name="otherTransformers">The other transformers.</param>
-    public TransformerConfigEntry(Transformer defaultTransformer, IEnumerable<Transformer> otherTransformers)
-    {
-        DefaultTransformer = defaultTransformer;
-        OtherTransformers = otherTransformers;
-    }
-
     /// <summary>
     /// Gets the configuration to create the default <see cref="ITransformer"/> for an <see cref="AgentType"/>.
     /// </summary>
     /// <value>The default transformer.</value>
-    public Transformer DefaultTransformer { get; }
+    public Transformer DefaultTransformer { get; } = defaultTransformer;
 
     /// <summary>
     /// Gets the list of configurations to create other <see cref="ITransformer"/> implementations for an <see cref="AgentType"/>.
     /// </summary>
     /// <value>The other transformers.</value>
-    public IEnumerable<Transformer> OtherTransformers { get; }
+    public IEnumerable<Transformer> OtherTransformers { get; } = otherTransformers;
 }

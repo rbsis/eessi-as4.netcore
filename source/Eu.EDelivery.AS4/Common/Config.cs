@@ -296,12 +296,7 @@ public sealed class Config : IConfig, IDisposable
             throw new FileNotFoundException($"The settings file {path} could not be found.");
         }
 
-        _settings = Deserialize<Settings>(path);
-        if (_settings == null)
-        {
-            throw new XmlException("Invalid Settings file");
-        }
-
+        _settings = Deserialize<Settings>(path) ?? throw new XmlException("Invalid Settings file");
         if (_settings.Database == null)
         {
             throw new InvalidOperationException(

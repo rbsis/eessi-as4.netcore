@@ -2,7 +2,6 @@
 using Eu.EDelivery.AS4.Common;
 using Eu.EDelivery.AS4.Entities;
 using Eu.EDelivery.AS4.Exceptions.Handlers;
-using Eu.EDelivery.AS4.Model.Internal;
 using Eu.EDelivery.AS4.Receivers;
 using Eu.EDelivery.AS4.Repositories;
 using Eu.EDelivery.AS4.Services;
@@ -87,7 +86,7 @@ public class AgentProvider
                 .Append(new CleanUpAgent(
                     logger: _serviceProvider.GetRequiredService<ILogger<CleanUpAgent>>(),
                     contextFactory: _serviceProvider.GetRequiredService<IDbContextFactory<DatastoreContext>>(),
-                    config.RetentionPeriod))
+                    config))
                 .Append(new RetryAgent(
                     logger: _serviceProvider.GetRequiredService<ILogger<RetryAgent>>(),
                     receiver: _serviceProvider.GetRequiredService<DatastoreReceiver>(),
@@ -121,7 +120,8 @@ public class AgentProvider
             throw new ArgumentNullException($@"{agentLogTag} has one or more Steps in the ErrorPipeline without a Type");
         }
 
-        var stepConfiguration = config.Settings.StepConfiguration ?? GetDefaultStepConfigurationForAgentType(config.Type);
+        var defaultAgentStepRegistry = _serviceProvider.GetRequiredService<IDefaultAgentStepRegistry>();
+        var stepConfiguration = config.Settings.StepConfiguration ?? defaultAgentStepRegistry.GetDefaultStepConfiguration(config.Type);
         var stepBuilder = _serviceProvider.GetRequiredService<IStepBuilder>();
         var exceptionHandler = _exceptionHandlerRegistry.GetHandler(config.Type);
         var stepExecutioner = new StepExecutioner(
@@ -129,39 +129,18 @@ public class AgentProvider
             stepBuilder.BuildSteps(stepConfiguration.ErrorPipeline ?? []),
             exceptionHandler);
 
+        var defaultAgentReceiverRegistry = _serviceProvider.GetRequiredService<IDefaultAgentReceiverRegistry>();
+        var defaultAgentTransformerRegistry = _serviceProvider.GetRequiredService<IDefaultAgentTransformerRegistry>();
+
         return new Agent(
             logger: _serviceProvider.GetRequiredService<ILogger<Agent>>(),
             config: config,
             receiver: _receiverBuilder.BuildFromConfig(config.Settings.Receiver
-                ?? GetDefaultReceiverForAgentType(config.Type)),
+                ?? defaultAgentReceiverRegistry.GetDefaultReceiver(config.Type)),
             transformer: _transformerBuilder.BuildFromConfig(config.Settings.Transformer
-                ?? GetDefaultTransformerForAgentType(config.Type).DefaultTransformer),
+                ?? defaultAgentTransformerRegistry.GetDefaultTransformer(config.Type)),
             exceptionHandler: exceptionHandler,
             steps: stepExecutioner,
             journalLogger: _serviceProvider.GetRequiredKeyedService<IJournalLogger>(typeof(JournalDatastoreLogger)));
     }
-
-    /// <summary>
-    /// Gets the default implementation of the <see cref="Receiver"/> for a given <paramref name="agentType"/>.
-    /// </summary>
-    /// <param name="agentType">Type of the agent.</param>
-    /// <returns></returns>
-    public static Receiver GetDefaultReceiverForAgentType(AgentType agentType) =>
-        DefaultAgentReceiverRegistry.GetDefaultReceiverFor(agentType);
-
-    /// <summary>
-    /// Gets the default implementation of the <see cref="Transformer"/> for the given <paramref name="agentType"/>.
-    /// </summary>
-    /// <param name="agentType">Type of the agent.</param>
-    /// <returns></returns>
-    public static TransformerConfigEntry GetDefaultTransformerForAgentType(AgentType agentType) =>
-        DefaultAgentTransformerRegistry.GetDefaultTransformerFor(agentType);
-
-    /// <summary>
-    /// Gets the default implementation of the <see cref="StepConfiguration"/> for the given <paramref name="agentType"/>.
-    /// </summary>
-    /// <param name="agentType">Type of the agent.</param>
-    /// <returns></returns>
-    public static StepConfiguration GetDefaultStepConfigurationForAgentType(AgentType agentType) =>
-        DefaultAgentStepRegistry.GetDefaultStepConfigurationFor(agentType);
 }

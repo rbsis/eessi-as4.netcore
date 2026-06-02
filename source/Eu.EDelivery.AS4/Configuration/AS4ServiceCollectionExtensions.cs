@@ -59,6 +59,7 @@ public static class AS4ServiceCollectionExtensions
                 sp.GetRequiredService<IPModeWatcher<ReceivingProcessingMode>>(),
                 sp.GetRequiredService<IPModeWatcher<SendingProcessingMode>>());
             config.Initialize(settingsFileName);
+
             return config;
         });
 
@@ -90,6 +91,7 @@ public static class AS4ServiceCollectionExtensions
 
     private static IServiceCollection AddAS4Repositories(this IServiceCollection serviceCollection) => serviceCollection
         .AddDbContextFactory<DatastoreContext>()
+        .AddHostedService<DatastoreContextMigrator>()
         .AddSingleton<ICertificateRepository, CertificateRepository>()
         .AddSingleton<IDatastoreRepository, DatastoreRepository>()
         .AddSingleton<IAS4MessageBodyStore, AS4MessageStoreProvider>(sp =>

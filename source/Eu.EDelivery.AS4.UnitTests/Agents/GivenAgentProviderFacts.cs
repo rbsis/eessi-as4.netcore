@@ -1,6 +1,7 @@
 ﻿using Eu.EDelivery.AS4.Agents;
 using Eu.EDelivery.AS4.Entities;
 using Eu.EDelivery.AS4.Exceptions.Handlers;
+using Eu.EDelivery.AS4.Model.Internal;
 using Eu.EDelivery.AS4.Receivers;
 using Eu.EDelivery.AS4.Repositories;
 using Eu.EDelivery.AS4.ServiceHandler.Providers;
@@ -65,6 +66,9 @@ public class GivenAgentProviderFacts
             .AddSingleton(new Mock<IInMessageService>().Object)
             .AddSingleton(new Mock<IAS4MessageBodyStore>().Object)
             .AddSingleton(new Mock<IStepBuilder>().Object)
+            .AddSingleton(new Mock<IDefaultAgentReceiverRegistry>().Object)
+            .AddSingleton(new Mock<IDefaultAgentTransformerRegistry>().Object)
+            .AddSingleton(new Mock<IDefaultAgentStepRegistry>().Object)
             .AddKeyedSingleton<IJournalLogger>(typeof(JournalDatastoreLogger), new Mock<IJournalLogger>().Object)
             .AddAS4Receivers()
             .BuildServiceProvider();
@@ -85,36 +89,68 @@ public class GivenAgentProviderFacts
     [Property]
     public Property DefaultTransformersAreSerializable(AgentType type)
     {
+        if (type == AgentType.Retry)
+        {
+            // The Retry agent is a special case, as it is the only agent that does not have a default transformer, but instead uses a custom implementation of the retry logic in the receiver. Therefore, we skip this case in this test.
+            return true.ToProperty();
+        }
+
         // Arrange
-        var expected = AgentProvider.GetDefaultTransformerForAgentType(type);
+        var defaultAgentTransformerRegistry = new DefaultAgentTransformerRegistry();
+        var expected = defaultAgentTransformerRegistry.GetDefaultTransformer(type);
         var json = JsonConvert.SerializeObject(expected);
 
         // Act
-        var actual = JsonConvert.DeserializeObject<TransformerConfigEntry>(json);
+        var actual = JsonConvert.DeserializeObject<Transformer>(json);
 
         // Assert
         Assert.NotNull(actual);
-        var sameDefault = expected.DefaultTransformer.Type == actual.DefaultTransformer.Type;
-        var sameOthers = expected.OtherTransformers
-            .Zip(actual.OtherTransformers, (t1, t2) => t1.Type == t2.Type)
+        var sameDefault = expected.Type == actual.Type;
+
+        return sameDefault.ToProperty();
+    }
+
+    [Property]
+    public Property OtherTransformersAreSerializable(AgentType type)
+    {
+        if (type == AgentType.Retry)
+        {
+            // The Retry agent is a special case, as it is the only agent that does not have a default transformer, but instead uses a custom implementation of the retry logic in the receiver. Therefore, we skip this case in this test.
+            return true.ToProperty();
+        }
+
+        // Arrange
+        var defaultAgentTransformerRegistry = new DefaultAgentTransformerRegistry();
+        var expected = defaultAgentTransformerRegistry.GetOtherTransformers(type);
+        var json = JsonConvert.SerializeObject(expected);
+
+        // Act
+        var actual = JsonConvert.DeserializeObject<Transformer[]>(json);
+
+        // Assert
+        Assert.NotNull(actual);
+        var sameOthers = expected
+            .Zip(actual, (t1, t2) => t1.Type == t2.Type)
             .All(x => x);
 
-        return sameDefault.ToProperty().And(sameOthers);
+        return sameOthers.ToProperty();
     }
 
     [Fact]
     public void RegistryContainsDefaultConfigurationForAllAgentTypes()
     {
+        var defaultAgentStepRegistry = new DefaultAgentStepRegistry();
         Assert.All(
-            Enum.GetValues(typeof(AgentType)).Cast<AgentType>(),
-            t => Assert.NotNull(AgentProvider.GetDefaultStepConfigurationForAgentType(t)));
+            Enum.GetValues(typeof(AgentType)).Cast<AgentType>().Where(x => x != AgentType.Retry),
+            t => Assert.NotNull(defaultAgentStepRegistry.GetDefaultStepConfiguration(t)));
     }
 
     [Fact]
     public void RegistryContainsDefaultTransformerForAllAgentTypes()
     {
+        var defaultAgentTransformerRegistry = new DefaultAgentTransformerRegistry();
         Assert.All(
-            Enum.GetValues(typeof(AgentType)).Cast<AgentType>(),
-            t => Assert.NotNull(AgentProvider.GetDefaultTransformerForAgentType(t)));
+            Enum.GetValues(typeof(AgentType)).Cast<AgentType>().Where(x => x != AgentType.Retry),
+            t => Assert.NotNull(defaultAgentTransformerRegistry.GetDefaultTransformer(t)));
     }
 }

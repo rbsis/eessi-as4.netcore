@@ -35,6 +35,14 @@ internal class InMemoryDbCommand : IAS4DbCommand
     /// <summary>
     /// Initialization process for the different DBMS storage types.
     /// </summary>
+    public void CreateDatabase()
+    {
+        _context.Database.EnsureCreated();
+    }
+
+    /// <summary>
+    /// Initialization process for the different DBMS storage types.
+    /// </summary>
     public async Task CreateDatabaseAsync(CancellationToken cancellation)
     {
         await _context.Database.EnsureCreatedAsync(cancellation);
