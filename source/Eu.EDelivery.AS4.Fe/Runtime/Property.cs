@@ -1,74 +1,72 @@
-﻿using System.Collections.Generic;
+﻿namespace Eu.EDelivery.AS4.Fe.Runtime;
 
-namespace Eu.EDelivery.AS4.Fe.Runtime
+/// <summary>
+/// Class to hold property information
+/// </summary>
+public class Property
 {
     /// <summary>
-    /// Class to hold property information
+    /// Gets or sets the name of the friendly. Which is displayed in the FE.
     /// </summary>
-    public class Property
-    {
-        /// <summary>
-        /// Gets or sets the name of the friendly. Which is displayed in the FE.
-        /// </summary>
-        /// <value>
-        /// The name of the friendly.
-        /// </value>
-        public string FriendlyName { get; set; }
-        /// <summary>
-        /// Gets or sets the name of the technical. The name known in the code.
-        /// </summary>
-        /// <value>
-        /// The name of the technical.
-        /// </value>
-        public string TechnicalName { get; set; }
-        /// <summary>
-        /// Gets or sets the data type.
-        /// </summary>
-        /// <value>
-        /// The type.
-        /// </value>
-        public string Type { get; set; }
-        /// <summary>
-        /// Gets or sets the regex. Which is used to limit/validate string input.
-        /// </summary>
-        /// <value>
-        /// The regex.
-        /// </value>
-        public string Regex { get; set; }
-        /// <summary>
-        /// Gets or sets the description which is shown in the ui.
-        /// </summary>
-        /// <value>
-        /// The description.
-        /// </value>
-        public string Description { get; set; }
-        /// <summary>
-        /// The default value
-        /// </summary>
-        public object DefaultValue { get; set; }
-        /// <summary>
-        /// Gets or sets the child properties.
-        /// </summary>
-        /// <value>
-        /// The properties.
-        /// </value>
-        public IEnumerable<Property> Properties { get; set; }
+    /// <value>
+    /// The name of the friendly.
+    /// </value>
+    public required string FriendlyName { get; set; }
+    /// <summary>
+    /// Gets or sets the name of the technical. The name known in the code.
+    /// </summary>
+    /// <value>
+    /// The name of the technical.
+    /// </value>
+    public required string TechnicalName { get; set; }
+    /// <summary>
+    /// Gets or sets the data type.
+    /// </summary>
+    /// <value>
+    /// The type.
+    /// </value>
+    public required string Type { get; set; }
+    /// <summary>
+    /// Gets or sets the regex. Which is used to limit/validate string input.
+    /// </summary>
+    /// <value>
+    /// The regex.
+    /// </value>
+    public required string Regex { get; set; }
+    /// <summary>
+    /// Gets or sets the description which is shown in the ui.
+    /// </summary>
+    /// <value>
+    /// The description.
+    /// </value>
+    public required string Description { get; set; }
+    /// <summary>
+    /// The default value
+    /// </summary>
+    public object? DefaultValue { get; set; }
+    /// <summary>
+    /// Gets or sets the child properties.
+    /// </summary>
+    /// <value>
+    /// The properties.
+    /// </value>
+    public required IEnumerable<Property> Properties { get; set; }
 
-        /// <summary>
-        /// Gets or sets if the property is required.
-        /// </summary>
-        /// <value>
-        /// The required.
-        /// </value>
-        public bool? Required { get; set; }
+    /// <summary>
+    /// Gets or sets if the property is required.
+    /// </summary>
+    /// <value>
+    /// The required.
+    /// </value>
+    public bool? Required { get; set; }
 
-        /// <summary>
-        /// Gets or sets the attributes which can be set for this setting.
-        /// </summary>
-        /// <value>
-        /// The attributes.
-        /// </value>
-        public IEnumerable<string> Attributes { get; set; }
-        public string Path { get; set; }
-    }
+    /// <summary>
+    /// Gets or sets the attributes which can be set for this setting.
+    /// </summary>
+    /// <value>
+    /// The attributes.
+    /// </value>
+    public IEnumerable<string>? Attributes { get; set; }
+
+    public required string Path { get; set; }
 }

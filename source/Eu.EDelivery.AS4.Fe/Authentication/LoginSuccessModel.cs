@@ -1,19 +1,18 @@
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 
-namespace Eu.EDelivery.AS4.Fe.Authentication
+namespace Eu.EDelivery.AS4.Fe.Authentication;
+
+/// <summary>
+/// Model containing successful login data
+/// </summary>
+public class LoginSuccessModel
 {
     /// <summary>
-    /// Model containing successful login data
+    /// Gets or sets the access token.
     /// </summary>
-    public class LoginSuccessModel
-    {
-        /// <summary>
-        /// Gets or sets the access token.
-        /// </summary>
-        /// <value>
-        /// The access token.
-        /// </value>
-        [JsonProperty("access_token")]
-        public string AccessToken { get; set; }
-    }
+    /// <value>
+    /// The access token.
+    /// </value>
+    [JsonProperty("access_token")]
+    public required string AccessToken { get; set; }
 }

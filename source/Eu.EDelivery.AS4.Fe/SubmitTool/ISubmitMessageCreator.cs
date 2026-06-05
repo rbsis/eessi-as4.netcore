@@ -1,17 +1,15 @@
-﻿using System.Threading.Tasks;
+﻿namespace Eu.EDelivery.AS4.Fe.SubmitTool;
 
-namespace Eu.EDelivery.AS4.Fe.SubmitTool
+/// <summary>
+/// Interface to be implemented to make a message creator for the submit tool.
+/// </summary>
+public interface ISubmitMessageCreator
 {
     /// <summary>
-    /// Interface to be implemented to make a message creator for the submit tool.
+    /// Submit a message
     /// </summary>
-    public interface ISubmitMessageCreator
-    {
-        /// <summary>
-        /// Submit a message
-        /// </summary>
-        /// <param name="submitInfo">The submit information.</param>
-        /// <returns></returns>
-        Task CreateSubmitMessages(MessagePayload submitInfo);
-    }
+    /// <param name="submitInfo">The submit information.</param>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
+    Task CreateSubmitMessagesAsync(MessagePayload submitInfo, CancellationToken cancellationToken);
 }

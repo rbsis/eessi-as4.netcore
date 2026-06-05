@@ -52,12 +52,11 @@ public class Startup
                         Description = "A Web API to upload and download payloads in a persistent manner.",
                         TermsOfService = new Uri("https://ec.europa.eu/digital-building-blocks/code/projects/EDELIVERY/repos/eessi-as4.net/browse"),
                         Contact = new OpenApiContact { Name = "DG EMPL" },
-                        License =
-                            new OpenApiLicense
-                            {
-                                Name = "EUPL License v1.1.",
-                                Url = new Uri("https://joinup.ec.europa.eu/community/eupl/og_page/european-union-public-licence-eupl-v11")
-                            }
+                        License = new OpenApiLicense
+                        {
+                            Name = "EUPL License v1.1.",
+                            Url = new Uri("https://joinup.ec.europa.eu/community/eupl/og_page/european-union-public-licence-eupl-v11")
+                        }
                     });
 
                 //Obsolete: options.OperationFilter<FileUploadOperation>()

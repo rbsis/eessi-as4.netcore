@@ -1,16 +1,15 @@
-﻿using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
+﻿using Eu.EDelivery.AS4.Fe.Services;
+using Eu.EDelivery.AS4.Fe.Settings;
 
-namespace Eu.EDelivery.AS4.Fe.Pmodes
+namespace Eu.EDelivery.AS4.Fe.Pmodes;
+
+public class PmodeSetup : IPmodeSetup
 {
-    public class PmodeSetup : IPmodeSetup
+    public void Run(IServiceCollection services, IConfiguration configuration)
     {
-        public void Run(IServiceCollection services, IConfigurationRoot configuration)
-        {
-            services.Configure<PmodeSettings>(configuration.GetSection("Pmodes"));
+        services.Configure<PmodeSettings>(configuration.GetSection("Pmodes"));
 
-            services.AddScoped<IAs4PmodeSource, As4PmodeSource>();
-            services.AddScoped<IPmodeService, PmodeService>();
-        }
+        services.AddScoped<IAs4PmodeSource, As4PmodeSource>();
+        services.AddScoped<IPmodeService, PmodeService>();
     }
 }

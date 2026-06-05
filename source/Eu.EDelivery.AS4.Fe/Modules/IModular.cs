@@ -1,7 +1,5 @@
-﻿namespace Eu.EDelivery.AS4.Fe.Modules
+﻿namespace Eu.EDelivery.AS4.Fe.Modules;
+
+public interface IModular
 {
-    public interface IModular
-    {
-        
-    }
 }

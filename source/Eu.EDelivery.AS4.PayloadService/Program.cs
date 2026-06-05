@@ -19,7 +19,7 @@ builder.Host
 // NLog: Setup NLog for Dependency injection
 LogManager.Setup().LoadConfiguration(builder =>
 {
-    builder.ForLogger().FilterMinLevel(NLog.LogLevel.Debug).WriteToConsole();
+    builder.ForLogger().FilterMinLevel(NLog.LogLevel.Debug).WriteToColoredConsole();
 });
 
 builder.Logging.ClearProviders();

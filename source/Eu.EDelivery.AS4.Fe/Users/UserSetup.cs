@@ -1,23 +1,23 @@
-﻿using Microsoft.AspNetCore.Builder;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
+﻿using Eu.EDelivery.AS4.Fe.Authentication;
+using Eu.EDelivery.AS4.Fe.Services;
 
-namespace Eu.EDelivery.AS4.Fe.Users
+namespace Eu.EDelivery.AS4.Fe.Users;
+
+/// <summary>
+/// Implementation of the user setup module
+/// </summary>
+/// <seealso cref="IUserSetup" />
+public class UserSetup : IUserSetup
 {
     /// <summary>
-    /// Implementation of the user setup module
+    /// Runs the specified services.
     /// </summary>
-    /// <seealso cref="Eu.EDelivery.AS4.Fe.Users.IUserSetup" />
-    public class UserSetup : IUserSetup
+    /// <param name="services">The services.</param>
+    /// <param name="configuration">The configuration.</param>
+    public void Run(IServiceCollection services, IConfiguration configuration)
     {
-        /// <summary>
-        /// Runs the specified services.
-        /// </summary>
-        /// <param name="services">The services.</param>
-        /// <param name="configuration">The configuration.</param>
-        public void Run(IServiceCollection services, IConfigurationRoot configuration)
-        {
-            services.AddScoped<IUserService, UserService>();
-        }
+        //TODO: connection string should be read from configuration
+        services.AddDbContextFactory<ApplicationDbContext>();
+        services.AddScoped<IUserService, UserService>();
     }
 }

@@ -1,141 +1,153 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
+﻿using Eu.EDelivery.AS4.Fe.Exceptions;
 using Eu.EDelivery.AS4.Fe.Monitor;
-using Eu.EDelivery.AS4.Fe.Pmodes;
+using Eu.EDelivery.AS4.Fe.Services;
+using Eu.EDelivery.AS4.Model.Common;
 using Eu.EDelivery.AS4.Model.PMode;
 using Eu.EDelivery.AS4.Model.Submit;
 using Eu.EDelivery.AS4.Serialization;
 using Microsoft.Extensions.Options;
 
-namespace Eu.EDelivery.AS4.Fe.SubmitTool
+namespace Eu.EDelivery.AS4.Fe.SubmitTool;
+
+/// <summary>
+///     Implementation of ISubmitMessageCreator
+/// </summary>
+/// <seealso cref="ISubmitMessageCreator" />
+public class SubmitMessageCreator : ISubmitMessageCreator
 {
+    private readonly IClient _client;
+    private readonly IEnumerable<IMessageHandler> _messageHandlers;
+    private readonly IOptions<SubmitToolOptions> _options;
+    private readonly IEnumerable<IPayloadHandler> _payloadHandlers;
+    private readonly IPmodeService _pmodeService;
+
     /// <summary>
-    ///     Implementation of ISubmitMessageCreator
+    ///     Initializes a new instance of the <see cref="SubmitMessageCreator" /> class.
     /// </summary>
-    /// <seealso cref="Eu.EDelivery.AS4.Fe.SubmitTool.ISubmitMessageCreator" />
-    public class SubmitMessageCreator : ISubmitMessageCreator
+    /// <param name="pmodeService">The pmode service.</param>
+    /// <param name="payloadHandlers">The payload handlers.</param>
+    /// <param name="messageHandlers">The message handlers.</param>
+    /// <param name="options">The configuration options.</param>
+    /// <param name="client">The SignalR client.</param>
+    public SubmitMessageCreator(IPmodeService pmodeService, IEnumerable<IPayloadHandler> payloadHandlers, IEnumerable<IMessageHandler> messageHandlers, IOptions<SubmitToolOptions> options, IClient client)
     {
-        private readonly IClient client;
-        private readonly IEnumerable<IMessageHandler> messageHandlers;
-        private readonly IOptions<SubmitToolOptions> options;
-        private readonly IEnumerable<IPayloadHandler> payloadHandlers;
-        private readonly IPmodeService pmodeService;
+        _pmodeService = pmodeService;
+        _payloadHandlers = payloadHandlers;
+        _messageHandlers = messageHandlers;
+        _options = options;
+        _client = client;
+    }
 
-        /// <summary>
-        ///     Initializes a new instance of the <see cref="SubmitMessageCreator" /> class.
-        /// </summary>
-        /// <param name="pmodeService">The pmode service.</param>
-        /// <param name="payloadHandlers">The payload handlers.</param>
-        /// <param name="messageHandlers">The message handlers.</param>
-        /// <param name="options">The configuration options.</param>
-        /// <param name="client">The SignalR client.</param>
-        public SubmitMessageCreator(IPmodeService pmodeService, IEnumerable<IPayloadHandler> payloadHandlers, IEnumerable<IMessageHandler> messageHandlers, IOptions<SubmitToolOptions> options, IClient client)
+    /// <summary>
+    ///     Submit one or more message(s)
+    /// </summary>
+    /// <param name="submitInfo">The submit information.</param>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
+    /// <exception cref="BusinessException">
+    ///     Missing to location
+    ///     or
+    ///     Missing payload location
+    ///     or
+    ///     Invalid number of submit messages value. Only a value between 1 &amp; 999 is allowed.
+    ///     or
+    ///     Could not find pmode
+    /// </exception>
+    public async Task CreateSubmitMessagesAsync(MessagePayload submitInfo, CancellationToken cancellationToken)
+    {
+        try
         {
-            this.pmodeService = pmodeService;
-            this.payloadHandlers = payloadHandlers;
-            this.messageHandlers = messageHandlers;
-            this.options = options;
-            this.client = client;
-        }
-
-        /// <summary>
-        ///     Submit one or more message(s)
-        /// </summary>
-        /// <param name="submitInfo">The submit information.</param>
-        /// <returns></returns>
-        /// <exception cref="BusinessException">
-        ///     Missing to location
-        ///     or
-        ///     Missing payload location
-        ///     or
-        ///     Invalid number of submit messages value. Only a value between 1 &amp; 999 is allowed.
-        ///     or
-        ///     Could not find pmode
-        /// </exception>
-        public async Task CreateSubmitMessages(MessagePayload submitInfo)
-        {
-            try
+            if (submitInfo.NumberOfSubmitMessages <= 0 || submitInfo.NumberOfSubmitMessages > 999)
             {
-                if (submitInfo.NumberOfSubmitMessages <= 0 || submitInfo.NumberOfSubmitMessages > 999) throw new BusinessException("Invalid number of submit messages value. Only a value between 1 & 999 is allowed.");
-
-                client.SendInfo($"Looking up PMode {submitInfo.SendingPmode}");
-                var sendingPmode = await pmodeService.GetSendingByName(submitInfo.SendingPmode);
-                if (sendingPmode == null) throw new BusinessException("Could not find PMode");
-                client.SendPmode(AS4XmlSerializer.ToString(sendingPmode.Pmode));
-
-                await CreateSubmitMessageObjects(submitInfo, sendingPmode.Pmode, options.Value.PayloadHttpAddress, options.Value.ToHttpAddress);
+                throw new BusinessException("Invalid number of submit messages value. Only a value between 1 & 999 is allowed.");
             }
-            catch (Exception ex)
+
+            await _client.SendInfoAsync($"Looking up PMode {submitInfo.SendingPmode}", cancellationToken);
+
+            var sendingPmode = await _pmodeService.GetSendingByNameAsync(submitInfo.SendingPmode, cancellationToken)
+                ?? throw new BusinessException("Could not find PMode");
+
+            await _client.SendPmodeAsync(AS4XmlSerializer.ToString(sendingPmode.Pmode), cancellationToken);
+
+            await CreateSubmitMessageObjectsAsync(submitInfo, sendingPmode.Pmode, _options.Value.PayloadHttpAddress, _options.Value.ToHttpAddress, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            await _client.SendErrorAsync(ex.Message, cancellationToken);
+            throw;
+        }
+    }
+
+    private async Task CreateSubmitMessageObjectsAsync(MessagePayload submitInfo, SendingProcessingMode? sendingPmode, string payloadDestination, string messageDestination, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(sendingPmode, nameof(sendingPmode));
+
+        var payloads = await CreatePayloadsAsync(submitInfo, payloadDestination, cancellationToken);
+
+        for (var i = 0; i < submitInfo.NumberOfSubmitMessages; i++)
+        {
+            await _client.SendInfoAsync($"Submitting message {i + 1} of {submitInfo.NumberOfSubmitMessages} to {messageDestination}", cancellationToken);
+            var submitMessage = BuildMessage(submitInfo, sendingPmode, payloads);
+            await SubmitMessage(submitMessage, messageDestination);
+        }
+    }
+
+    private async Task<List<FilePayload>> CreatePayloadsAsync(MessagePayload submitInfo, string payloadDestination, CancellationToken cancellationToken)
+    {
+        var payloads = new List<FilePayload>();
+
+        foreach (var payloadInfo in submitInfo.Files)
+        {
+            var messagePayload = new FilePayload
             {
-                client.SendError(ex.Message);
-                throw;
-            }
-        }
+                MimeType = payloadInfo.ContentType,
+                Location = await ProcessFileAsync(payloadInfo.Data, payloadInfo.FileName, payloadDestination, cancellationToken),
+                FileName = payloadInfo.FileName
+            };
 
-        private async Task CreateSubmitMessageObjects(MessagePayload submitInfo, SendingProcessingMode sendingPmode, string payloadDestination, string messageDestination)
+            payloads.Add(messagePayload);
+        }
+        return payloads;
+    }
+
+    private static SubmitMessage BuildMessage(MessagePayload submitInfo, SendingProcessingMode sendingPmode, List<FilePayload> payloads)
+    {
+        var messageId = $"{Guid.NewGuid()}@{Environment.MachineName}";
+        var submitMessage = new SubmitMessage
         {
-            var payloads = await CreatePayloads(submitInfo, payloadDestination);
+            MessageInfo = { MessageId = messageId },
+            Payloads = [.. payloads.Select(x => x.ToPayload(CreatePayloadId(submitInfo, x.FileName, messageId)))]
+        };
+        submitMessage.Collaboration.AgreementRef = new Agreement { PModeId = sendingPmode.Id };
+        return submitMessage;
+    }
 
-            for (var i = 0; i < submitInfo.NumberOfSubmitMessages; i++)
-            {
-                client.SendInfo($"Submitting message {i + 1} of {submitInfo.NumberOfSubmitMessages} to {messageDestination}");
-                var submitMessage = BuildMessage(submitInfo, sendingPmode, payloads);
-                await SubmitMessage(submitMessage, messageDestination);
-            }
-        }
+    private static string CreatePayloadId(MessagePayload submitInfo, string fileName, string messageId)
+    {
+        var name = Path.GetFileNameWithoutExtension(fileName);
+        return submitInfo.NumberOfSubmitMessages > 1 ? $"{messageId}.{name}" : name;
+    }
 
-        private async Task<List<FilePayload>> CreatePayloads(MessagePayload submitInfo, string payloadDestination)
-        {
-            var payloads = new List<FilePayload>();
+    private async Task<string> ProcessFileAsync(Stream stream, string fileName, string toLocation, CancellationToken cancellationToken)
+    {
+        await _client.SendInfoAsync($"Submitting payload \"{fileName}\" to {toLocation}", cancellationToken);
+        var handler = _payloadHandlers.FirstOrDefault(x => x.CanHandle(toLocation))
+            ?? throw new InvalidOperationException($"No payload handler found for {toLocation}");
 
-            foreach (var payloadInfo in submitInfo.Files)
-            {
-                var messagePayload = new FilePayload
-                {
-                    MimeType = payloadInfo.ContentType,
-                    Location = await ProcessFile(payloadInfo.Data, payloadInfo.FileName, payloadDestination),
-                    FileName = payloadInfo.FileName
-                };
+        var result = await handler.HandleAsync(toLocation, fileName, stream, cancellationToken)
+            ?? throw new InvalidOperationException($"Failed to process payload \"{fileName}\" for {toLocation}");
 
-                payloads.Add(messagePayload);
-            }
-            return payloads;
-        }
+        await _client.SendInfoAsync($"\"{fileName}\" has id {result}", cancellationToken);
+        return result;
+    }
 
-        private SubmitMessage BuildMessage(MessagePayload submitInfo, SendingProcessingMode sendingPmode, List<FilePayload> payloads)
-        {
-            var submitMessage = new SubmitMessage {MessageInfo = {MessageId = $"{Guid.NewGuid()}@{Environment.MachineName}"}};
-            submitMessage.Collaboration.AgreementRef.PModeId = sendingPmode.Id;
+    private async Task SubmitMessage(SubmitMessage message, string toLocation)
+    {
+        ArgumentNullException.ThrowIfNull(message.MessageInfo.MessageId, nameof(message.MessageInfo.MessageId));
 
-            submitMessage.Payloads = payloads.Select(x => x.ToPayload(CreatePayloadId(submitInfo, x.FileName, submitMessage.MessageInfo.MessageId))).ToArray();
-            return submitMessage;
-        }
-
-        private string CreatePayloadId(MessagePayload submitInfo, string fileName, string messageId)
-        {
-            var name = Path.GetFileNameWithoutExtension(fileName);
-            return submitInfo.NumberOfSubmitMessages > 1 ? $"{messageId}.{name}" : name;
-        }
-
-        private async Task<string> ProcessFile(Stream stream, string fileName, string toLocation)
-        {
-            client.SendInfo($"Submitting payload \"{fileName}\" to {toLocation}");
-            var handler = payloadHandlers.FirstOrDefault(x => x.CanHandle(toLocation));
-            if (handler == null) throw new Exception($"No payload handler found for {toLocation}");
-            var result = await handler.Handle(toLocation, fileName, stream);
-            client.SendInfo($"\"{fileName}\" has id {result}");
-            return result;
-        }
-
-        private async Task SubmitMessage(SubmitMessage message, string toLocation)
-        {
-            client.SendAs4Message(AS4XmlSerializer.ToString(message), message.MessageInfo.MessageId);
-            var handler = messageHandlers.First(x => x.CanHandle(toLocation));
-            if (handler == null) throw new Exception($"No message handler found for {toLocation}");
-            await handler.Handle(message, toLocation);
-        }
+        await _client.SendAs4MessageAsync(AS4XmlSerializer.ToString(message), message.MessageInfo.MessageId, CancellationToken.None);
+        var handler = _messageHandlers.First(x => x.CanHandle(toLocation))
+            ?? throw new Exception($"No message handler found for {toLocation}");
+        await handler.Handle(message, toLocation);
     }
 }

@@ -1,7 +1,6 @@
-namespace Eu.EDelivery.AS4.Fe.Monitor.Model
+﻿namespace Eu.EDelivery.AS4.Fe.Monitor.Model;
+
+public class MessageDetails
 {
-    public class MessageDetails
-    {
-        public string SoapEnvelope { get; set; }
-    }
+    public string? SoapEnvelope { get; set; }
 }

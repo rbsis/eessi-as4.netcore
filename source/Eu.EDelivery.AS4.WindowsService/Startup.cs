@@ -11,8 +11,6 @@ namespace Eu.EDelivery.AS4.WindowsService;
 /// <param name="configuration">The hosting environment configuration.</param>
 public class Startup(IConfiguration configuration)
 {
-    private string AssemblyVersion => GetType().GetTypeInfo().Assembly.GetName().Version?.ToString() ?? string.Empty;
-
     /// <summary>
     /// Gets the <see cref="IConfiguration" /> implementation for the Payload Service Web API.
     /// </summary>

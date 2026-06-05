@@ -38,6 +38,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Eu.EDelivery.AS4.PayloadSer
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Eu.EDelivery.AS4.WindowsService", "Eu.EDelivery.AS4.WindowsService\Eu.EDelivery.AS4.WindowsService.csproj", "{D1F88397-2D6C-46C5-9A88-B89CD96CF6EF}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Eu.EDelivery.AS4.Fe", "Eu.EDelivery.AS4.Fe\Eu.EDelivery.AS4.Fe.csproj", "{ECF0543A-82CB-AB2C-BC58-5CE795951409}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -92,6 +94,10 @@ Global
 		{D1F88397-2D6C-46C5-9A88-B89CD96CF6EF}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D1F88397-2D6C-46C5-9A88-B89CD96CF6EF}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D1F88397-2D6C-46C5-9A88-B89CD96CF6EF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{ECF0543A-82CB-AB2C-BC58-5CE795951409}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{ECF0543A-82CB-AB2C-BC58-5CE795951409}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{ECF0543A-82CB-AB2C-BC58-5CE795951409}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{ECF0543A-82CB-AB2C-BC58-5CE795951409}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

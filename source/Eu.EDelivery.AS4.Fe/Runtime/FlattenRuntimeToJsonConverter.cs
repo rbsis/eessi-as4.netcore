@@ -1,73 +1,72 @@
-﻿using System;
-using System.Collections.Generic;
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace Eu.EDelivery.AS4.Fe.Runtime
+namespace Eu.EDelivery.AS4.Fe.Runtime;
+
+public class FlattenRuntimeToJsonConverter : JsonConverter
 {
-    public class FlattenRuntimeToJsonConverter : JsonConverter
+    public override void WriteJson(JsonWriter writer, object? value, JsonSerializer serializer)
     {
-        public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
+        var mainObj = new JObject();
+        if (value is IEnumerable<ItemType> list)
         {
-            var list = value as IEnumerable<ItemType>;
-            var mainObj = new JObject();
-            if (list != null)
+            foreach (var itemType in list)
             {
-                foreach (var item in list)
-                {
-                    WriteItem(item, mainObj);
-                }
-            }
-            else WriteItem((ItemType)value, mainObj);
-
-            mainObj.WriteTo(writer);
-        }
-
-        private void WriteItem(ItemType itemType, JObject rootJson)
-        {
-            // Add all properties to the current JObject
-            foreach (var prop in itemType.Properties)
-            {
-                AddChild(prop, rootJson);
+                WriteItem(itemType, mainObj);
             }
         }
-
-        private void AddChild(Property property, JObject root)
+        else if (value is ItemType itemType)
         {
-            AddProperty(property, root);
-            //root.Add(new JProperty(property.Path, PropertyToJobject(property.Description, property)));
-            if (property.Properties == null) return;
-            foreach (var childProp in property.Properties)
-            {
-                AddChild(childProp, root);
-            }
+            WriteItem(itemType, mainObj);
         }
 
-        public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
-        {
-            throw new NotImplementedException();
-        }
+        mainObj.WriteTo(writer);
+    }
 
-        public override bool CanConvert(Type objectType)
+    private static void WriteItem(ItemType itemType, JObject rootJson)
+    {
+        // Add all properties to the current JObject
+        foreach (var prop in itemType.Properties)
         {
-            return true;
+            AddChild(prop, rootJson);
         }
+    }
 
-        private void AddProperty(Property property, JObject root)
+    private static void AddChild(Property property, JObject root)
+    {
+        AddProperty(property, root);
+        //root.Add(new JProperty(property.Path, PropertyToJobject(property.Description, property)));
+        if (property.Properties == null) return;
+        foreach (var childProp in property.Properties)
         {
-            if (string.IsNullOrEmpty(property.Description) && property.DefaultValue == null) return;
-            root.Add(new JProperty(property.Path, new JObject(
-                new JProperty("description", property.Description),
-                new JProperty("defaultvalue", property.DefaultValue)
-            )));
+            AddChild(childProp, root);
         }
+    }
 
-        private JObject PropertyToJobject(string description, Property property)
-        {
-            return new JObject(
-                new JProperty("description", description),
-                new JProperty("defaultvalue", property.DefaultValue)
-            );
-        }
+    public override object? ReadJson(JsonReader reader, Type objectType, object? existingValue, JsonSerializer serializer)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override bool CanConvert(Type objectType)
+    {
+        return true;
+    }
+
+    private static void AddProperty(Property property, JObject root)
+    {
+        if (string.IsNullOrEmpty(property.Description) && property.DefaultValue == null) return;
+        root.Add(new JProperty(property.Path, new JObject(
+            new JProperty("description", property.Description),
+            new JProperty("defaultvalue", property.DefaultValue)
+        )));
+    }
+
+    private static JObject PropertyToJobject(string description, Property property)
+    {
+        return new JObject(
+            new JProperty("description", description),
+            new JProperty("defaultvalue", property.DefaultValue)
+        );
     }
 }

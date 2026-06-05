@@ -1,8 +1,7 @@
-﻿namespace Eu.EDelivery.AS4.Fe.Monitor.Model
+﻿namespace Eu.EDelivery.AS4.Fe.Monitor.Model;
+
+public enum SortOrder
 {
-    public enum SortOrder
-    {
-        Descending,
-        Ascending
-    }
+    Descending,
+    Ascending
 }

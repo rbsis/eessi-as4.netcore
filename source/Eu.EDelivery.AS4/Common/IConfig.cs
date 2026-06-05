@@ -98,9 +98,21 @@ public interface IConfig
     /// Retrieve the PMode from the Global Settings
     /// </summary>
     /// <param name="id"></param>
-    /// <exception cref="Exception"></exception>
     /// <returns></returns>
     SendingProcessingMode? GetSendingPMode(string id);
+
+    /// <summary>
+    /// Return all the configured <see cref="SendingProcessingMode"/>
+    /// </summary>
+    /// <returns></returns>
+    IEnumerable<SendingProcessingMode> GetSendingPModes();
+
+    /// <summary>
+    /// Retrieve the PMode from the Global Settings
+    /// </summary>
+    /// <param name="id"></param>
+    /// <returns></returns>
+    ReceivingProcessingMode? GetReceivingPMode(string id);
 
     /// <summary>
     /// Return all the installed Receiving Processing Modes
@@ -120,6 +132,20 @@ public interface IConfig
     /// </summary>
     /// <returns></returns>
     IEnumerable<AgentConfig> GetAgentsConfiguration();
+
+    /// <summary>
+    /// Gets the file location for receiving p mode.
+    /// </summary>
+    /// <param name="id">The identifier.</param>
+    /// <returns></returns>
+    string GetFileLocationForReceivingPMode(string id);
+
+    /// <summary>
+    /// Gets the file location for sending p mode.
+    /// </summary>
+    /// <param name="id">The identifier.</param>
+    /// <returns></returns>
+    string GetFileLocationForSendingPMode(string id);
 
     /// <summary>
     /// Gets the retry polling interval for which the Retry Agent will poll 

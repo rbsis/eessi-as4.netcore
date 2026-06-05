@@ -1,8 +1,7 @@
-﻿namespace Eu.EDelivery.AS4.Fe.Pmodes.Model
+﻿namespace Eu.EDelivery.AS4.Fe.Pmodes.Model;
+
+public enum PmodeType
 {
-    public enum PmodeType
-    {
-        Receiving,
-        Sending
-    }
+    Receiving,
+    Sending
 }

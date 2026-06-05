@@ -1,17 +1,16 @@
-﻿namespace Eu.EDelivery.AS4.Fe.Authentication
-{
-    public class AuthenticationConfiguration
-    {
-        public string ConnectionString { get; set; }
-        public string Provider { get; set; }
-        public Jwt JwtOptions { get; set; }
-    }
+﻿namespace Eu.EDelivery.AS4.Fe.Authentication;
 
-    public class Jwt
-    {
-        public string Issuer { get; set; }
-        public string Audience { get; set; }
-        public int ValidFor { get; set; }
-        public string Key { get; set; }
-    }
+public class AuthenticationConfiguration
+{
+    public required string ConnectionString { get; set; }
+    public required string Provider { get; set; }
+    public required Jwt JwtOptions { get; set; }
+}
+
+public class Jwt
+{
+    public required string Issuer { get; set; }
+    public required string Audience { get; set; }
+    public int ValidFor { get; set; }
+    public required string Key { get; set; }
 }

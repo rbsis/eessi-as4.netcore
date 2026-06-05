@@ -1,8 +1,7 @@
-﻿namespace Eu.EDelivery.AS4.Fe.Models
+﻿namespace Eu.EDelivery.AS4.Fe.Models;
+
+public class LoginModel
 {
-    public class LoginModel
-    {
-        public string Username { get; set; }
-        public string Password { get; set; }
-    }
+    public required string Username { get; set; }
+    public required string Password { get; set; }
 }

@@ -1,9 +1,7 @@
-using Eu.EDelivery.AS4.Fe.Modules;
+﻿using Eu.EDelivery.AS4.Fe.Modules;
 
-namespace Eu.EDelivery.AS4.Fe.SubmitTool
+namespace Eu.EDelivery.AS4.Fe.SubmitTool;
+
+public interface ISubmitToolSetup : IModular, IRunAtServicesStartup
 {
-    public interface ISubmitToolSetup : IModular, IRunAtServicesStartup
-    {
-        
-    }
 }

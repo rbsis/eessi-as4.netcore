@@ -1,64 +1,74 @@
-﻿using Microsoft.AspNet.SignalR;
+﻿using Microsoft.AspNetCore.SignalR;
 
-namespace Eu.EDelivery.AS4.Fe.Monitor
+namespace Eu.EDelivery.AS4.Fe.Monitor;
+
+/// <summary>
+/// Implementation of the IClient to send messages using SignalR
+/// </summary>
+/// <seealso cref="IClient" />
+public class Client : IClient
 {
-    /// <summary>
-    /// Implementation of the IClient to send messages using SignalR
-    /// </summary>
-    /// <seealso cref="Eu.EDelivery.AS4.Fe.Monitor.IClient" />
-    public class Client : IClient
+    private readonly IHubContext<SubmitToolMessageHub> _hub;
+
+    public Client(IHubContext<SubmitToolMessageHub> hub)
     {
-        /// <summary>
-        /// Send info log
-        /// </summary>
-        /// <param name="message">The message.</param>
-        public void SendInfo(string message)
-        {
-            GlobalHost.ConnectionManager.GetHubContext<SubmitToolMessageHub>().Clients.All.onMessage(new ClientMessage
-            {
-                Message = message
-            });
-        }
+        _hub = hub;
+    }
 
-        /// <summary>
-        /// Send log containing PMode
-        /// </summary>
-        /// <param name="pmode">The pmode.</param>
-        public void SendPmode(string pmode)
+    /// <summary>
+    /// Send info log
+    /// </summary>
+    /// <param name="message">The message.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    public async Task SendInfoAsync(string message, CancellationToken cancellationToken)
+    {
+        await _hub.Clients.All.SendAsync("onMessage", new ClientMessage
         {
-            GlobalHost.ConnectionManager.GetHubContext<SubmitToolMessageHub>().Clients.All.onMessage(new ClientMessage
-            {
-                Message = pmode,
-                Type = LogType.Pmode
-            });
-        }
+            Message = message
+        }, cancellationToken);
+    }
 
-        /// <summary>
-        /// Sendg log containing an AS4 message
-        /// </summary>
-        /// <param name="message">The message.</param>
-        /// <param name="id">The id of the AS4 message</param>
-        public void SendAs4Message(string message, string id)
+    /// <summary>
+    /// Send log containing PMode
+    /// </summary>
+    /// <param name="pmode">The pmode.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    public async Task SendPmodeAsync(string pmode, CancellationToken cancellationToken)
+    {
+        await _hub.Clients.All.SendAsync("onMessage", new ClientMessage
         {
-            GlobalHost.ConnectionManager.GetHubContext<SubmitToolMessageHub>().Clients.All.onMessage(new ClientMessage
-            {
-                Message = message,
-                Data = id,
-                Type = LogType.Message
-            });
-        }
+            Message = pmode,
+            Type = LogType.Pmode
+        }, cancellationToken);
+    }
 
-        /// <summary>
-        /// Sends log containing error
-        /// </summary>
-        /// <param name="message">The message.</param>
-        public void SendError(string message)
+    /// <summary>
+    /// Sendg log containing an AS4 message
+    /// </summary>
+    /// <param name="message">The message.</param>
+    /// <param name="id">The id of the AS4 message</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    public async Task SendAs4MessageAsync(string message, string id, CancellationToken cancellationToken)
+    {
+        await _hub.Clients.All.SendAsync("onMessage", new ClientMessage
         {
-            GlobalHost.ConnectionManager.GetHubContext<SubmitToolMessageHub>().Clients.All.onMessage(new ClientMessage
-            {
-                Message = message,
-                Type = LogType.Error
-            });
-        }
+            Message = message,
+            Data = id,
+            Type = LogType.Message
+        }, cancellationToken);
+    }
+
+    /// <summary>
+    /// Sends log containing error
+    /// </summary>
+    /// <param name="message">The message.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    public async Task SendErrorAsync(string message, CancellationToken cancellationToken)
+    {
+        await _hub.Clients.All.SendAsync("onMessage", new ClientMessage
+        {
+            Message = message,
+            Type = LogType.Error
+        }, cancellationToken);
     }
 }

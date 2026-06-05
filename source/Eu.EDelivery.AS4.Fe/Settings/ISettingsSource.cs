@@ -1,11 +1,9 @@
-﻿using System.Threading.Tasks;
-using Eu.EDelivery.AS4.Fe.Modules;
+﻿using Eu.EDelivery.AS4.Fe.Modules;
 
-namespace Eu.EDelivery.AS4.Fe.Settings
+namespace Eu.EDelivery.AS4.Fe.Settings;
+
+public interface ISettingsSource : IModular
 {
-    public interface ISettingsSource : IModular
-    {
-        Task<Model.Internal.Settings> Get();
-        Task Save(Model.Internal.Settings settings);
-    }
+    Task<Model.Internal.Settings?> GetAsync(CancellationToken cancellationToken);
+    Task SaveAsync(Model.Internal.Settings settings, CancellationToken cancellationToken);
 }
