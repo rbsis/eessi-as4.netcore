@@ -17,17 +17,17 @@ namespace Eu.EDelivery.AS4.Fe.Pmodes;
 public class As4PmodeSource : IAs4PmodeSource
 {
     private readonly IConfig _config;
-    private readonly IOptionsSnapshot<PmodeSettings> _settings;
+    private readonly PmodeSettings _settings;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="As4PmodeSource"/> class.
     /// </summary>
     /// <param name="config"></param>
     /// <param name="settings">The settings.</param>
-    public As4PmodeSource(IConfig config, IOptionsSnapshot<PmodeSettings> settings)
+    public As4PmodeSource(IConfig config, IOptions<PmodeSettings> settings)
     {
         _config = config;
-        _settings = settings;
+        _settings = settings.Value;
     }
 
     /// <summary>
@@ -127,11 +127,11 @@ public class As4PmodeSource : IAs4PmodeSource
         ArgumentException.ThrowIfNullOrEmpty(basePmode.Name, nameof(basePmode.Name));
 
         var fileName = FilterOutInvalidFileNameChars(basePmode.Name);
-        var pmodeFile = Path.Combine(_settings.Value.ReceivingPmodeFolder, fileName + ".xml");
+        var pmodeFile = Path.Combine(_settings.ReceivingPmodeFolder, fileName + ".xml");
 
         if (File.Exists(pmodeFile))
         {
-            pmodeFile = Path.Combine(_settings.Value.ReceivingPmodeFolder, fileName + "-" + Guid.NewGuid() + ".xml");
+            pmodeFile = Path.Combine(_settings.ReceivingPmodeFolder, fileName + "-" + Guid.NewGuid() + ".xml");
         }
 
         var pmodeString = await AS4XmlSerializer.ToStringAsync(basePmode.Pmode, cancellationToken);
@@ -175,11 +175,11 @@ public class As4PmodeSource : IAs4PmodeSource
         ArgumentException.ThrowIfNullOrEmpty(basePmode.Name, nameof(basePmode.Name));
 
         var fileName = FilterOutInvalidFileNameChars(basePmode.Name);
-        var pmodeFile = Path.Combine(_settings.Value.SendingPmodeFolder, fileName + ".xml");
+        var pmodeFile = Path.Combine(_settings.SendingPmodeFolder, fileName + ".xml");
 
         if (File.Exists(pmodeFile))
         {
-            pmodeFile = Path.Combine(_settings.Value.SendingPmodeFolder, fileName + "-" + Guid.NewGuid() + ".xml");
+            pmodeFile = Path.Combine(_settings.SendingPmodeFolder, fileName + "-" + Guid.NewGuid() + ".xml");
         }
 
         var pmodeString = await AS4XmlSerializer.ToStringAsync(basePmode.Pmode, cancellationToken);

@@ -17,10 +17,7 @@ public class FileSettingsSource : ISettingsSource
 
     public FileSettingsSource(IOptions<ApplicationSettings> appSettings)
     {
-        if (appSettings.Value?.SettingsXml == null)
-        {
-            throw new ArgumentNullException(nameof(appSettings.Value.SettingsXml));
-        }
+        ArgumentException.ThrowIfNullOrEmpty(appSettings.Value.SettingsXml, nameof(appSettings.Value.SettingsXml));
 
         _settingsPath = Path.Combine(
             AppDomain.CurrentDomain.BaseDirectory,

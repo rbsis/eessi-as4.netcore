@@ -2,12 +2,11 @@
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Eu.EDelivery.AS4.Fe.Authentication;
-using Eu.EDelivery.AS4.Fe.Controllers;
 using Eu.EDelivery.AS4.Fe.Exceptions;
 using Eu.EDelivery.AS4.Fe.Modules;
 using Eu.EDelivery.AS4.Fe.Monitor;
 using Eu.EDelivery.AS4.Fe.Runtime;
+using Eu.EDelivery.AS4.Fe.Services;
 using Eu.EDelivery.AS4.Fe.Settings;
 using Eu.EDelivery.AS4.Fe.Swagger;
 using Eu.EDelivery.AS4.Model.PMode;
@@ -49,23 +48,30 @@ public class Startup
     /// <param name="services">The services.</param>
     public void ConfigureServices(IServiceCollection services)
     {
-        services.AddOptions();
-        services.Configure<FormOptions>(x =>
-        {
-            x.ValueLengthLimit = int.MaxValue;
-            x.ValueCountLimit = int.MaxValue;
-            x.MultipartBodyLengthLimit = int.MaxValue;
-            x.MemoryBufferThreshold = int.MaxValue;
-        });
-        services.Configure<ApplicationSettings>(Configuration.GetSection("Settings"));
-        services.Configure<PortalSettings>(Configuration.Bind);
-        services.Configure<JsonOptions>(options =>
-        {
-            options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
-        });
-        //services.AddAS4()
-        services.AddMappers();
-        services.AddModules();
+        services
+            .AddOptions()
+            .Configure<FormOptions>(x =>
+            {
+                x.ValueLengthLimit = int.MaxValue;
+                x.ValueCountLimit = int.MaxValue;
+                x.MultipartBodyLengthLimit = int.MaxValue;
+                x.MemoryBufferThreshold = int.MaxValue;
+            })
+            .Configure<ApplicationSettings>(Configuration.GetSection("Settings"))
+            .Configure<PortalSettings>(Configuration.Bind)
+            .Configure<JsonOptions>(options =>
+            {
+                options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+            });
+
+        var applicationSettings = Configuration.GetSection("Settings").Get<ApplicationSettings>()
+            ?? throw new InvalidOperationException("Application configuration is missing.");
+
+        services
+            .AddAS4Config(applicationSettings.SettingsXml)
+            .AddAS4()
+            .AddMappers()
+            .AddModules();
 
         ConfigureModularServices<IRunAtServicesStartup>(services, service => service.Run(services, Configuration));
 
@@ -86,11 +92,11 @@ public class Startup
                 options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
             });
 
-        services.AddScoped<ISettingsSource, FileSettingsSource>();
-        services.AddScoped<IPortalSettingsService, PortalSettingsService>();
-        services.AddScoped<ITokenService, TokenService>();
+        services
+            .AddSingleton<ISettingsSource, FileSettingsSource>()
+            .AddScoped<IPortalSettingsService, PortalSettingsService>();
 
-        services.AddSingleton<IRuntimeLoader, RuntimeLoader>(sp => RuntimeLoader.Initialize(
+        services.AddSingleton<IRuntimeLoader>(sp => RuntimeLoader.Initialize(
             sp.GetRequiredService<ILogger<RuntimeLoader>>(),
             sp.GetRequiredService<IOptions<ApplicationSettings>>()));
 

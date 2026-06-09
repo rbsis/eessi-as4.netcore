@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
 
-namespace Eu.EDelivery.AS4.Fe.Controllers;
+namespace Eu.EDelivery.AS4.Fe.Services;
 
 /// <summary>
 /// Implementation to manage portal settings using appsettings.json

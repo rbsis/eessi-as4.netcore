@@ -21,7 +21,7 @@ public class AuthenticationSetup : IAuthenticationSetup
             ?? throw new InvalidOperationException("Authentication configuration is missing.");
 
         services
-            .AddDbContext<ApplicationDbContext>(options => SqlConnectionBuilder.Build(databaseSettings.Provider, databaseSettings.ConnectionString, options))
+            .AddDbContextFactory<ApplicationDbContext>(options => SqlConnectionBuilder.Build(databaseSettings.Provider, databaseSettings.ConnectionString, options))
             .AddIdentity<ApplicationUser, IdentityRole>(options =>
             {
                 options.Password.RequireNonAlphanumeric = false;
@@ -60,6 +60,8 @@ public class AuthenticationSetup : IAuthenticationSetup
             .BuildServiceProvider()
             .GetRequiredService<IOptionsMonitor<JwtOptions>>()
             .OnChange(x => tokenValidationParameters.IssuerSigningKey = x.SigningKey);
+
+        services.AddScoped<ITokenService, TokenService>();
     }
 
     public void Run(IApplicationBuilder app)

@@ -1,7 +1,7 @@
 ﻿using Eu.EDelivery.AS4.Fe.Models;
 using Eu.EDelivery.AS4.Fe.Settings;
 
-namespace Eu.EDelivery.AS4.Fe.Controllers;
+namespace Eu.EDelivery.AS4.Fe.Services;
 
 /// <summary>
 /// Interface to be implemented to manage portal settings

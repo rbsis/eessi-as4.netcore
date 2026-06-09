@@ -1,5 +1,5 @@
 ﻿using Eu.EDelivery.AS4.Fe.Authentication;
-using Eu.EDelivery.AS4.Fe.Controllers;
+using Eu.EDelivery.AS4.Fe.Services;
 using Eu.EDelivery.AS4.Fe.Settings;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;

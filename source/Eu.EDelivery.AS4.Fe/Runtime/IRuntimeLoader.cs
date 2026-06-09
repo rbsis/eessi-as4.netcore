@@ -1,12 +1,9 @@
-﻿using Eu.EDelivery.AS4.Fe.Modules;
-
-namespace Eu.EDelivery.AS4.Fe.Runtime;
+﻿namespace Eu.EDelivery.AS4.Fe.Runtime;
 
 /// <summary>
 /// Interface to implement a runtime loader
 /// </summary>
-/// <seealso cref="IModular" />
-public interface IRuntimeLoader : IModular
+public interface IRuntimeLoader
 {
     /// <summary>
     /// Gets the receivers.

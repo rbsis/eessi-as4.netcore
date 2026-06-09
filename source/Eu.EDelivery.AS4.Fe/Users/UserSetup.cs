@@ -1,4 +1,5 @@
 ﻿using Eu.EDelivery.AS4.Fe.Authentication;
+using Eu.EDelivery.AS4.Fe.Database;
 using Eu.EDelivery.AS4.Fe.Services;
 
 namespace Eu.EDelivery.AS4.Fe.Users;
@@ -16,8 +17,10 @@ public class UserSetup : IUserSetup
     /// <param name="configuration">The configuration.</param>
     public void Run(IServiceCollection services, IConfiguration configuration)
     {
-        //TODO: connection string should be read from configuration
-        services.AddDbContextFactory<ApplicationDbContext>();
+        var databaseSettings = configuration.GetSection("Authentication").Get<AuthenticationConfiguration>()
+            ?? throw new InvalidOperationException("Authentication configuration is missing.");
+
+        services.AddDbContextFactory<ApplicationDbContext>(options => SqlConnectionBuilder.Build(databaseSettings.Provider, databaseSettings.ConnectionString, options));
         services.AddScoped<IUserService, UserService>();
     }
 }

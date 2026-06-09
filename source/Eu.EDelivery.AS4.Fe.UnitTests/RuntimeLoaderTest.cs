@@ -15,7 +15,8 @@ public class RuntimeLoaderTest
         var options = Substitute.For<IOptions<ApplicationSettings>>();
         options.Value.Returns(new ApplicationSettings()
         {
-            Runtime = Directory.GetCurrentDirectory()
+            Runtime = Directory.GetCurrentDirectory(),
+            SettingsXml = string.Empty
         });
 
         // Act
