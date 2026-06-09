@@ -1,7 +1,6 @@
 ﻿using System.Security.Cryptography.X509Certificates;
 using Eu.EDelivery.AS4.Model.Core;
 using Eu.EDelivery.AS4.Services.PullRequestAuthorization;
-using Eu.EDelivery.AS4.TestUtils;
 
 namespace Eu.EDelivery.AS4.UnitTests.Services;
 

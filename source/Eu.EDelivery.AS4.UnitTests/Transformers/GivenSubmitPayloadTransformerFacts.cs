@@ -1,8 +1,8 @@
 ﻿using Eu.EDelivery.AS4.Model.Internal;
 using Eu.EDelivery.AS4.Model.PMode;
 using Eu.EDelivery.AS4.Strategies.Retriever;
+using Eu.EDelivery.AS4.TestUtils.Stubs;
 using Eu.EDelivery.AS4.Transformers;
-using Eu.EDelivery.AS4.UnitTests.Common;
 
 namespace Eu.EDelivery.AS4.UnitTests.Transformers;
 

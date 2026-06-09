@@ -3,7 +3,7 @@ using Eu.EDelivery.AS4.Common;
 using Eu.EDelivery.AS4.Model.Internal;
 using Eu.EDelivery.AS4.Model.PMode;
 
-namespace Eu.EDelivery.AS4.UnitTests.Common;
+namespace Eu.EDelivery.AS4.TestUtils.Stubs;
 
 public class PseudoConfig : IConfig
 {
@@ -150,38 +150,24 @@ public class PseudoConfig : IConfig
     {
         throw new NotImplementedException();
     }
-}
 
-public class PseudoConfigFacts : PseudoConfig
-{
-    [Fact]
-    public void FailsToInitialize()
+    public IEnumerable<SendingProcessingMode> GetSendingPModes()
     {
-        Assert.False(new PseudoConfig().IsInitialized);
-        Assert.ThrowsAny<Exception>(() =>
-        {
-            Initialize("settings.xml");
-        });
+        throw new NotImplementedException();
     }
 
-    [Fact]
-    public void FailsToGetAgents()
+    public ReceivingProcessingMode? GetReceivingPMode(string id)
     {
-        Assert.ThrowsAny<Exception>(GetEnabledMinderTestAgents);
-        Assert.ThrowsAny<Exception>(GetAgentsConfiguration);
+        throw new NotImplementedException();
     }
 
-    [Fact]
-    public void FailsToGetPModes()
+    public string GetFileLocationForReceivingPMode(string id)
     {
-        Assert.ThrowsAny<Exception>(GetReceivingPModes);
-        Assert.ThrowsAny<Exception>(() => GetSendingPMode("ignored string"));
-        Assert.ThrowsAny<Exception>(() => ContainsSendingPMode("ignored string"));
+        throw new NotImplementedException();
     }
 
-    [Fact]
-    public void FailsToGetSetting()
+    public string GetFileLocationForSendingPMode(string id)
     {
-        Assert.ThrowsAny<Exception>(() => GetSetting("ignored string"));
+        throw new NotImplementedException();
     }
 }

@@ -2,7 +2,7 @@
 using Eu.EDelivery.AS4.Repositories;
 using Eu.EDelivery.AS4.Serialization;
 
-namespace Eu.EDelivery.AS4.UnitTests.Repositories;
+namespace Eu.EDelivery.AS4.TestUtils.Repositories;
 
 /// <summary>
 /// In-Memory Implementation to store the <see cref="AS4Message"/> instances.

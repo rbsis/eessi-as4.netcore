@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Eu.EDelivery.AS4.Http.Response;
 
-internal class AS4ResponseFactory : IAS4ResponseFactory
+public class AS4ResponseFactory : IAS4ResponseFactory
 {
     private readonly ILogger<AS4ResponseFactory> _logger;
     private readonly ISerializerProvider _serializerProvider;

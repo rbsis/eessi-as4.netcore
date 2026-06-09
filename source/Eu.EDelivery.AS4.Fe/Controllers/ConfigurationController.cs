@@ -1,5 +1,4 @@
 ﻿using System.Net;
-using EnsureThat;
 using Eu.EDelivery.AS4.Agents;
 using Eu.EDelivery.AS4.Fe.Authentication;
 using Eu.EDelivery.AS4.Fe.Models;
@@ -477,7 +476,7 @@ public class ConfigurationController : Controller
     [SwaggerResponse((int)HttpStatusCode.Conflict, "Indicates that another entity already exists", typeof(ErrorModel))]
     public async Task<IActionResult> DeleteForwardAgent(string name, CancellationToken cancellationToken)
     {
-        EnsureArg.IsNotNullOrEmpty(name, nameof(name));
+        ArgumentException.ThrowIfNullOrEmpty(name, nameof(name));
         await _settingsService.DeleteAgentAsync(name,
             agents => agents?.ForwardAgents ?? [],
             (settings, agents) => settings.ForwardAgents = agents,
@@ -498,7 +497,7 @@ public class ConfigurationController : Controller
     [SwaggerResponse((int)HttpStatusCode.Conflict, "Indicates that another entity already exists", typeof(ErrorModel))]
     public async Task<IActionResult> CreateSendAgent([FromBody] AgentSettings settingsAgent, CancellationToken cancellationToken)
     {
-        EnsureArg.IsNotNull(settingsAgent, nameof(settingsAgent));
+        ArgumentNullException.ThrowIfNull(settingsAgent, nameof(settingsAgent));
         await _settingsService.CreateAgentAsync(settingsAgent,
             agents => agents?.SendAgents ?? [],
             (settings, agents) => settings.SendAgents = agents,
@@ -519,7 +518,7 @@ public class ConfigurationController : Controller
     [SwaggerResponse((int)HttpStatusCode.Conflict, "Indicates that another entity already exists", typeof(ErrorModel))]
     public async Task<IActionResult> DeleteSendAgent(string name, CancellationToken cancellationToken)
     {
-        EnsureArg.IsNotNullOrEmpty(name, nameof(name));
+        ArgumentException.ThrowIfNullOrEmpty(name, nameof(name));
         await _settingsService.DeleteAgentAsync(name,
             agents => agents?.SendAgents ?? [],
             (settings, agents) => settings.SendAgents = agents,
@@ -542,8 +541,8 @@ public class ConfigurationController : Controller
     [SwaggerResponse((int)HttpStatusCode.NotFound, "Returned when the requested send agent doesn't exist", typeof(ErrorModel))]
     public async Task<IActionResult> UpdateSendAgent([FromBody] AgentSettings settingsAgent, string originalName, CancellationToken cancellationToken)
     {
-        EnsureArg.IsNotNull(settingsAgent, nameof(settingsAgent));
-        EnsureArg.IsNotNullOrEmpty(originalName, nameof(originalName));
+        ArgumentNullException.ThrowIfNull(settingsAgent, nameof(settingsAgent));
+        ArgumentException.ThrowIfNullOrEmpty(originalName, nameof(originalName));
         await _settingsService.UpdateAgentAsync(settingsAgent,
             originalName,
             agents => agents?.SendAgents ?? [],
@@ -565,7 +564,7 @@ public class ConfigurationController : Controller
     [SwaggerResponse((int)HttpStatusCode.Conflict, "Indicates that another entity already exists", typeof(ErrorModel))]
     public async Task<IActionResult> CreateReceiveAgent([FromBody] AgentSettings settingsAgent, CancellationToken cancellationToken)
     {
-        EnsureArg.IsNotNull(settingsAgent, nameof(settingsAgent));
+        ArgumentNullException.ThrowIfNull(settingsAgent, nameof(settingsAgent));
         await _settingsService.CreateAgentAsync(settingsAgent,
             agents => agents?.ReceiveAgents ?? [],
             (settings, agents) => settings.ReceiveAgents = agents,
@@ -586,7 +585,7 @@ public class ConfigurationController : Controller
     [SwaggerResponse((int)HttpStatusCode.NotFound, "Returned when the requested receive agent doesn't exist", typeof(ErrorModel))]
     public async Task<IActionResult> DeleteReceiveAgent(string name, CancellationToken cancellationToken)
     {
-        EnsureArg.IsNotNullOrEmpty(name, nameof(name));
+        ArgumentException.ThrowIfNullOrEmpty(name, nameof(name));
         await _settingsService.DeleteAgentAsync(name,
             agents => agents?.ReceiveAgents ?? [],
             (settings, agents) => settings.ReceiveAgents = agents,
@@ -609,8 +608,8 @@ public class ConfigurationController : Controller
     [SwaggerResponse((int)HttpStatusCode.NotFound, "Returned when the requested receive agent doesn't exist", typeof(ErrorModel))]
     public async Task<IActionResult> UpdateReceiveAgent([FromBody] AgentSettings settingsAgent, string originalName, CancellationToken cancellationToken)
     {
-        EnsureArg.IsNotNull(settingsAgent, nameof(settingsAgent));
-        EnsureArg.IsNotNullOrEmpty(originalName, nameof(originalName));
+        ArgumentNullException.ThrowIfNull(settingsAgent, nameof(settingsAgent));
+        ArgumentException.ThrowIfNullOrEmpty(originalName, nameof(originalName));
         await _settingsService.UpdateAgentAsync(settingsAgent,
             originalName, agents => agents?.ReceiveAgents ?? [],
             (settings, agents) => settings.ReceiveAgents = agents,
@@ -631,7 +630,7 @@ public class ConfigurationController : Controller
     [SwaggerResponse((int)HttpStatusCode.Conflict, "Indicates that another entity already exists", typeof(ErrorModel))]
     public async Task<IActionResult> CreateDeliverAgent([FromBody] AgentSettings settingsAgent, CancellationToken cancellationToken)
     {
-        EnsureArg.IsNotNull(settingsAgent, nameof(settingsAgent));
+        ArgumentNullException.ThrowIfNull(settingsAgent, nameof(settingsAgent));
         await _settingsService.CreateAgentAsync(settingsAgent,
             agents => agents?.DeliverAgents ?? [],
             (settings, agents) => settings.DeliverAgents = agents,
@@ -652,7 +651,7 @@ public class ConfigurationController : Controller
     [SwaggerResponse((int)HttpStatusCode.NotFound, "Returned when the requested submit agent doesn't exist", typeof(ErrorModel))]
     public async Task DeleteDeliverAgent(string name, CancellationToken cancellationToken)
     {
-        EnsureArg.IsNotNullOrEmpty(name, nameof(name));
+        ArgumentException.ThrowIfNullOrEmpty(name, nameof(name));
         await _settingsService.DeleteAgentAsync(name,
             agents => agents?.DeliverAgents ?? [],
             (settings, agents) => settings.DeliverAgents = agents,
@@ -674,8 +673,8 @@ public class ConfigurationController : Controller
     [SwaggerResponse((int)HttpStatusCode.NotFound, "Returned when the requested submit agent doesn't exist", typeof(ErrorModel))]
     public async Task<IActionResult> UpdateDeliverAgent([FromBody] AgentSettings settingsAgent, string originalName, CancellationToken cancellationToken)
     {
-        EnsureArg.IsNotNull(settingsAgent, nameof(settingsAgent));
-        EnsureArg.IsNotNullOrEmpty(originalName, nameof(originalName));
+        ArgumentNullException.ThrowIfNull(settingsAgent, nameof(settingsAgent));
+        ArgumentException.ThrowIfNullOrEmpty(originalName, nameof(originalName));
         await _settingsService.UpdateAgentAsync(settingsAgent,
             originalName,
             agents => agents?.DeliverAgents ?? [],
@@ -697,7 +696,7 @@ public class ConfigurationController : Controller
     [SwaggerResponse((int)HttpStatusCode.Conflict, "Indicates that another entity already exists", typeof(ErrorModel))]
     public async Task<IActionResult> CreateNotifyConsumerAgent([FromBody] AgentSettings settingsAgent, CancellationToken cancellationToken)
     {
-        EnsureArg.IsNotNull(settingsAgent, nameof(settingsAgent));
+        ArgumentNullException.ThrowIfNull(settingsAgent, nameof(settingsAgent));
         await _settingsService.CreateAgentAsync(settingsAgent,
             agents => agents?.NotifyAgents ?? [],
             (settings, agents) => settings.NotifyAgents = agents,
@@ -718,7 +717,7 @@ public class ConfigurationController : Controller
     [SwaggerResponse((int)HttpStatusCode.NotFound, "Returned when the requested submit agent doesn't exist", typeof(ErrorModel))]
     public async Task<IActionResult> DeleteNotifyConsumerAgent(string name, CancellationToken cancellationToken)
     {
-        EnsureArg.IsNotNullOrEmpty(name, nameof(name));
+        ArgumentException.ThrowIfNullOrEmpty(name, nameof(name));
         await _settingsService.DeleteAgentAsync(name,
             agents => agents?.NotifyAgents ?? [],
             (settings, agents) => settings.NotifyAgents = agents,
@@ -741,8 +740,8 @@ public class ConfigurationController : Controller
     [SwaggerResponse((int)HttpStatusCode.NotFound, "Returned when the requested submit agent doesn't exist", typeof(ErrorModel))]
     public async Task<IActionResult> UpdateNotifyConsumerAgent([FromBody] AgentSettings settingsAgent, string originalName, CancellationToken cancellationToken)
     {
-        EnsureArg.IsNotNull(settingsAgent, nameof(settingsAgent));
-        EnsureArg.IsNotNullOrEmpty(originalName, nameof(originalName));
+        ArgumentNullException.ThrowIfNull(settingsAgent, nameof(settingsAgent));
+        ArgumentException.ThrowIfNullOrEmpty(originalName, nameof(originalName));
         await _settingsService.UpdateAgentAsync(settingsAgent,
             originalName,
             agents => agents?.NotifyAgents ?? [],
@@ -764,7 +763,7 @@ public class ConfigurationController : Controller
     [SwaggerResponse((int)HttpStatusCode.Conflict, "Indicates that another entity already exists", typeof(ErrorModel))]
     public async Task<IActionResult> CreatePullReceiveAgent([FromBody] AgentSettings settingsAgent, CancellationToken cancellationToken)
     {
-        EnsureArg.IsNotNull(settingsAgent, nameof(settingsAgent));
+        ArgumentNullException.ThrowIfNull(settingsAgent, nameof(settingsAgent));
         await _settingsService.CreateAgentAsync(settingsAgent,
             agents => agents?.PullReceiveAgents ?? [],
             (settings, agents) => settings.PullReceiveAgents = agents,
@@ -785,7 +784,7 @@ public class ConfigurationController : Controller
     [SwaggerResponse((int)HttpStatusCode.NotFound, "Returned when the requested submit agent doesn't exist", typeof(ErrorModel))]
     public async Task<IActionResult> DeletePullReceiveAgent(string name, CancellationToken cancellationToken)
     {
-        EnsureArg.IsNotNullOrEmpty(name, nameof(name));
+        ArgumentException.ThrowIfNullOrEmpty(name, nameof(name));
         await _settingsService.DeleteAgentAsync(name,
             agents => agents?.PullReceiveAgents ?? [],
             (settings, agents) => settings.PullReceiveAgents = agents,
@@ -808,8 +807,8 @@ public class ConfigurationController : Controller
     [SwaggerResponse((int)HttpStatusCode.NotFound, "Returned when the requested submit agent doesn't exist", typeof(ErrorModel))]
     public async Task<IActionResult> UpdatePullReceiveAgent([FromBody] AgentSettings settingsAgent, string originalName, CancellationToken cancellationToken)
     {
-        EnsureArg.IsNotNull(settingsAgent, nameof(settingsAgent));
-        EnsureArg.IsNotNullOrEmpty(originalName, nameof(originalName));
+        ArgumentNullException.ThrowIfNull(settingsAgent, nameof(settingsAgent));
+        ArgumentException.ThrowIfNullOrEmpty(originalName, nameof(originalName));
         await _settingsService.UpdateAgentAsync(settingsAgent,
             originalName,
             agents => agents?.PullReceiveAgents ?? [],
@@ -831,7 +830,7 @@ public class ConfigurationController : Controller
     [SwaggerResponse((int)HttpStatusCode.Conflict, "Indicates that another entity already exists", typeof(ErrorModel))]
     public async Task<IActionResult> CreatePullSendAgent([FromBody] AgentSettings settingsAgent, CancellationToken cancellationToken)
     {
-        EnsureArg.IsNotNull(settingsAgent, nameof(settingsAgent));
+        ArgumentNullException.ThrowIfNull(settingsAgent, nameof(settingsAgent));
         await _settingsService.CreateAgentAsync(settingsAgent,
             agents => agents?.PullSendAgents ?? [],
             (settings, agents) => settings.PullSendAgents = agents,
@@ -852,7 +851,7 @@ public class ConfigurationController : Controller
     [SwaggerResponse((int)HttpStatusCode.NotFound, "Returned when the requested submit agent doesn't exist", typeof(ErrorModel))]
     public async Task DeletePullSendAgent(string name, CancellationToken cancellationToken)
     {
-        EnsureArg.IsNotNullOrEmpty(name, nameof(name));
+        ArgumentException.ThrowIfNullOrEmpty(name, nameof(name));
         await _settingsService.DeleteAgentAsync(name,
             agents => agents?.PullSendAgents ?? [],
             (settings, agents) => settings.PullSendAgents = agents,
@@ -874,8 +873,8 @@ public class ConfigurationController : Controller
     [SwaggerResponse((int)HttpStatusCode.NotFound, "Returned when the requested submit agent doesn't exist", typeof(ErrorModel))]
     public async Task UpdatePullSendAgent([FromBody] AgentSettings settingsAgent, string originalName, CancellationToken cancellationToken)
     {
-        EnsureArg.IsNotNull(settingsAgent, nameof(settingsAgent));
-        EnsureArg.IsNotNullOrEmpty(originalName, nameof(originalName));
+        ArgumentNullException.ThrowIfNull(settingsAgent, nameof(settingsAgent));
+        ArgumentException.ThrowIfNullOrEmpty(originalName, nameof(originalName));
         await _settingsService.UpdateAgentAsync(settingsAgent,
             originalName,
             agents => agents?.PullSendAgents ?? [],

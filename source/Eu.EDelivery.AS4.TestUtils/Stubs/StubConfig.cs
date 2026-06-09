@@ -1,6 +1,6 @@
 ﻿using Eu.EDelivery.AS4.Model.PMode;
 
-namespace Eu.EDelivery.AS4.UnitTests.Common;
+namespace Eu.EDelivery.AS4.TestUtils.Stubs;
 
 /// <summary>
 /// Create a Stubbed Config for the tests

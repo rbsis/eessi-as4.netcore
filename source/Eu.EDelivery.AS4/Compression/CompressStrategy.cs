@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Eu.EDelivery.AS4.Compression;
 
-internal class CompressStrategy : ICompressStrategy
+public class CompressStrategy : ICompressStrategy
 {
     public const string CompressionType = "application/gzip";
 

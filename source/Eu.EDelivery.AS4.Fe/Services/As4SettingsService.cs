@@ -1,5 +1,4 @@
-﻿using EnsureThat;
-using Eu.EDelivery.AS4.Fe.Exceptions;
+﻿using Eu.EDelivery.AS4.Fe.Exceptions;
 using Eu.EDelivery.AS4.Fe.Models;
 using Eu.EDelivery.AS4.Fe.Settings;
 using Eu.EDelivery.AS4.Model.Internal;
@@ -138,8 +137,6 @@ public class As4SettingsService : IAs4SettingsService
     /// <exception cref="NotFoundException">Agent doesn't exist</exception>
     public async Task UpdateAgentAsync(AgentSettings settingsAgent, string originalAgentName, Func<SettingsAgents?, AgentSettings[]> getAgents, Action<SettingsAgents, AgentSettings[]> setAgents, CancellationToken cancellationToken)
     {
-        EnsureArg.IsNotNullOrEmpty(originalAgentName, nameof(originalAgentName));
-
         var file = await GetSettingsAsync(cancellationToken);
         var agents = getAgents(file.Agents);
         // If a rename of an agent is requested then validate that no other agent with the new name exists yet
@@ -170,7 +167,7 @@ public class As4SettingsService : IAs4SettingsService
     /// <exception cref="NotFoundException"></exception>
     public async Task DeleteAgentAsync(string name, Func<SettingsAgents?, AgentSettings[]> getAgents, Action<SettingsAgents, AgentSettings[]> setAgents, CancellationToken cancellationToken)
     {
-        EnsureArg.IsNotNullOrEmpty(name, nameof(name));
+        ArgumentException.ThrowIfNullOrEmpty(name, nameof(name));
 
         var file = await GetSettingsAsync(cancellationToken);
         var agents = getAgents(file.Agents);

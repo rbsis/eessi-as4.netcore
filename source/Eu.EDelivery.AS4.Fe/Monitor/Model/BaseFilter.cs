@@ -15,10 +15,28 @@ public abstract class BaseFilter<TInput, TOutput>
         return query.Skip(ResultsPerPage * (Page - 1)).Take(ResultsPerPage);
     }
 
+    public IEnumerable<TOutput> ApplyPaging(IEnumerable<TOutput> query)
+    {
+        return query.Skip(ResultsPerPage * (Page - 1)).Take(ResultsPerPage);
+    }
+
     public async Task<MessageResult<TOutput>> ToResult(IQueryable<TOutput> query)
     {
         var count = await query.CountAsync();
         var result = await ApplyPaging(query).ToListAsync();
+        return new MessageResult<TOutput>
+        {
+            Messages = result,
+            Total = count,
+            Pages = (int)Math.Ceiling((decimal)count / (decimal)ResultsPerPage),
+            Page = Page == 0 ? 1 : Page
+        };
+    }
+
+    public MessageResult<TOutput> ToResult(IEnumerable<TOutput> query)
+    {
+        var count = query.Count();
+        var result = ApplyPaging(query).ToList();
         return new MessageResult<TOutput>
         {
             Messages = result,

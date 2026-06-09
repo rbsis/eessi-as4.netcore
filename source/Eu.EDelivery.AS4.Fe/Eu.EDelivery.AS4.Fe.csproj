@@ -42,7 +42,7 @@
   <ItemGroup>
     <PackageReference Include="Ensure.That" Version="10.1.0" />
     <PackageReference Include="HttpMultipartParser" Version="10.0.0" />
-    <PackageReference Include="Microsoft.ApplicationInsights.AspNetCore" Version="3.1.2" />
+    <PackageReference Include="Microsoft.ApplicationInsights.AspNetCore" Version="2.23.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.27" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="8.0.27" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR" Version="1.2.10" />

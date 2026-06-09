@@ -5,8 +5,7 @@ using Eu.EDelivery.AS4.Model.PMode;
 using Eu.EDelivery.AS4.Repositories;
 using Eu.EDelivery.AS4.Security.Encryption;
 using Eu.EDelivery.AS4.Steps.Receive;
-using Eu.EDelivery.AS4.TestUtils;
-using Eu.EDelivery.AS4.UnitTests.Common;
+using Eu.EDelivery.AS4.TestUtils.Stubs;
 using Eu.EDelivery.AS4.UnitTests.Model;
 using Microsoft.Extensions.Logging.Abstractions;
 

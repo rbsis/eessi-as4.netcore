@@ -4,9 +4,9 @@ using Eu.EDelivery.AS4.Extensions;
 using Eu.EDelivery.AS4.Model.Internal;
 using Eu.EDelivery.AS4.Receivers;
 using Eu.EDelivery.AS4.Repositories;
+using Eu.EDelivery.AS4.TestUtils.Stubs;
 using Eu.EDelivery.AS4.UnitTests.Common;
 using Eu.EDelivery.AS4.UnitTests.Model;
-using Eu.EDelivery.AS4.UnitTests.Repositories;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 

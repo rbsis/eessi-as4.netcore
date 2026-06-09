@@ -5,7 +5,7 @@ using Eu.EDelivery.AS4.Model.PMode;
 using Eu.EDelivery.AS4.Security.References;
 using Eu.EDelivery.AS4.Steps;
 using Eu.EDelivery.AS4.Steps.Send;
-using Eu.EDelivery.AS4.UnitTests.Common;
+using Eu.EDelivery.AS4.TestUtils.Stubs;
 using Eu.EDelivery.AS4.UnitTests.Model;
 using Microsoft.Extensions.Logging.Abstractions;
 using static Eu.EDelivery.AS4.UnitTests.Properties.Resources;

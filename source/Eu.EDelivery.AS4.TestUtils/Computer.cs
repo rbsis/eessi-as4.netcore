@@ -4,10 +4,30 @@ namespace Eu.EDelivery.AS4.TestUtils;
 
 public static class Computer
 {
-    public static void RunCommand(string command)
+    public static void RunPowershellScript(string command)
     {
-        using PowerShell instance = PowerShell.Create();
+        using var instance = PowerShell.Create();
         instance.AddScript(command);
         instance.Invoke();
+    }
+
+    public static IEnumerable<string> GetFilesInDirectory(string directoryName, string pattern, bool recursive)
+    {
+        if (!Directory.Exists(directoryName))
+        {
+            throw new DirectoryNotFoundException($"Directory {directoryName} does not exist. (Current directory = {Environment.CurrentDirectory} )");
+        }
+
+        var matchingFiles = new List<string>();
+        var subDirectories = Directory.GetDirectories(directoryName);
+
+        foreach (var subDirectory in subDirectories)
+        {
+            matchingFiles.AddRange(GetFilesInDirectory(subDirectory, pattern, recursive));
+        }
+
+        matchingFiles.AddRange(Directory.GetFiles(directoryName, pattern));
+
+        return [.. matchingFiles];
     }
 }

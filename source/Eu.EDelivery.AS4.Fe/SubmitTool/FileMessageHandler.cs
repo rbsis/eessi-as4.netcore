@@ -17,10 +17,7 @@ public class FileMessageHandler : IMessageHandler
     /// <returns>
     ///   <c>true</c> if this instance can handle the specified location; otherwise, <c>false</c>.
     /// </returns>
-    public bool CanHandle(string location)
-    {
-        return location.ToLower().StartsWith("file://");
-    }
+    public bool CanHandle(string location) => location.StartsWith("file://", StringComparison.CurrentCultureIgnoreCase);
 
     /// <summary>
     /// Handles the specified message.
@@ -29,18 +26,17 @@ public class FileMessageHandler : IMessageHandler
     /// <param name="toLocation">To location.</param>
     /// <returns></returns>
     /// <exception cref="BusinessException"></exception>
-    public async Task Handle(SubmitMessage message, string toLocation)
+    /// <param name="cancellationToken"></param>
+    public async Task HandleAsync(SubmitMessage message, string toLocation, CancellationToken cancellationToken)
     {
         try
         {
             await Task.Run(() =>
             {
                 var serializer = new XmlSerializer(typeof(SubmitMessage));
-                using (var fs = File.Create(Path.Combine(toLocation, $"{message.MessageInfo.MessageId}.xml")))
-                {
-                    serializer.Serialize(fs, message);
-                }
-            });
+                using var fs = File.Create(Path.Combine(toLocation, $"{message.MessageInfo.MessageId}.xml"));
+                serializer.Serialize(fs, message);
+            }, cancellationToken);
         }
         catch (Exception)
         {

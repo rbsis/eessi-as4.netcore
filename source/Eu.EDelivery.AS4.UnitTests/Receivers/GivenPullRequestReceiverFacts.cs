@@ -2,7 +2,7 @@
 using Eu.EDelivery.AS4.Model.PMode;
 using Eu.EDelivery.AS4.Receivers;
 using Eu.EDelivery.AS4.Serialization;
-using Eu.EDelivery.AS4.UnitTests.Common;
+using Eu.EDelivery.AS4.TestUtils.Stubs;
 using Eu.EDelivery.AS4.UnitTests.Model;
 using Microsoft.Extensions.Logging.Abstractions;
 

@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Eu.EDelivery.AS4.Exceptions.Handlers;
 
-internal class InboundExceptionHandler : IAgentExceptionHandler
+public class InboundExceptionHandler : IAgentExceptionHandler
 {
     private readonly ILogger<InboundExceptionHandler> _logger;
     private readonly IExceptionService _exceptionService;

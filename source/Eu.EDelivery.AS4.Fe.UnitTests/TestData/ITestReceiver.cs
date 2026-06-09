@@ -1,7 +1,6 @@
-﻿namespace Eu.EDelivery.AS4.Fe.UnitTests.TestData
+﻿namespace Eu.EDelivery.AS4.Fe.UnitTests.TestData;
+
+public interface ITestReceiver
 {
-    public interface ITestReceiver
-    {
-        string Name { get; set; }
-    }
+    string Name { get; set; }
 }

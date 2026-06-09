@@ -1,4 +1,5 @@
 ﻿using Eu.EDelivery.AS4.Entities;
+using Eu.EDelivery.AS4.TestUtils.Stubs;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;

@@ -2,7 +2,7 @@
 using Eu.EDelivery.AS4.Model.Internal;
 using Eu.EDelivery.AS4.Model.PMode;
 using Eu.EDelivery.AS4.Steps.Forward;
-using Eu.EDelivery.AS4.UnitTests.Common;
+using Eu.EDelivery.AS4.TestUtils.Stubs;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Eu.EDelivery.AS4.UnitTests.Steps.Forward;

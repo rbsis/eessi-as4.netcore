@@ -15,7 +15,7 @@ public class SimulatePayloadServiceHandler : IPayloadHandler
     /// </returns>
     public bool CanHandle(string location)
     {
-        return location.ToLower().StartsWith("simulate://");
+        return location.StartsWith("simulate://", StringComparison.CurrentCultureIgnoreCase);
     }
 
     /// <summary>

@@ -28,7 +28,7 @@ public class MshMessageHandler : IMessageHandler
     /// <exception cref="NotImplementedException"></exception>
     public bool CanHandle(string location)
     {
-        return location.ToLower().StartsWith("http");
+        return location.StartsWith("http", StringComparison.CurrentCultureIgnoreCase);
     }
 
     /// <summary>
@@ -39,30 +39,29 @@ public class MshMessageHandler : IMessageHandler
     /// <returns></returns>
     /// <exception cref="BusinessException">
     /// </exception>
-    public async Task Handle(SubmitMessage message, string toLocation)
+    /// <param name="cancellationToken"></param>
+    public async Task HandleAsync(SubmitMessage message, string toLocation, CancellationToken cancellationToken)
     {
-        using (var client = new HttpClient())
+        using var client = new HttpClient();
+        var stringBuilder = new StringBuilder();
+
+        using var xmlWriter = XmlWriter.Create(stringBuilder, Settings);
+        var serializer = new XmlSerializer(typeof(SubmitMessage));
+        serializer.Serialize(xmlWriter, message);
+
+        try
         {
-            var stringBuilder = new StringBuilder();
-            using (var xmlWriter = XmlWriter.Create(stringBuilder, Settings))
-            {
-                var serializer = new XmlSerializer(typeof(SubmitMessage));
-                serializer.Serialize(xmlWriter, message);
-                try
-                {
-                    var result = await client.PostAsync(toLocation, new StringContent(stringBuilder.ToString(), Encoding.Unicode, "application/soap+xml"));
-                    var test = result.Content.ReadAsStringAsync();
-                    result.EnsureSuccessStatusCode();
-                }
-                catch (HttpRequestException)
-                {
-                    throw new BusinessException($"Could not submit message to {toLocation}. Please check that the address is correct.");
-                }
-                catch (Exception)
-                {
-                    throw new BusinessException($"Unexpected error while trying to send the message to ${toLocation}.");
-                }
-            }
+            var result = await client.PostAsync(toLocation, new StringContent(stringBuilder.ToString(), Encoding.Unicode, "application/soap+xml"), cancellationToken);
+            var test = result.Content.ReadAsStringAsync(cancellationToken);
+            result.EnsureSuccessStatusCode();
+        }
+        catch (HttpRequestException)
+        {
+            throw new BusinessException($"Could not submit message to {toLocation}. Please check that the address is correct.");
+        }
+        catch (Exception)
+        {
+            throw new BusinessException($"Unexpected error while trying to send the message to ${toLocation}.");
         }
     }
 }

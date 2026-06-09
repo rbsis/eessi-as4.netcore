@@ -5,7 +5,7 @@ using Eu.EDelivery.AS4.Utilities;
 
 namespace Eu.EDelivery.AS4.Repositories;
 
-internal class AS4MessageBodyFileStore : IAS4MessageBodyStore
+public class AS4MessageBodyFileStore : IAS4MessageBodyStore
 {
     private readonly ISerializerProvider _serializerProvider;
 

@@ -6,7 +6,7 @@ namespace Eu.EDelivery.AS4.Validators;
 /// <summary>
 /// Validate the <see cref="SubmitMessage"/> Model
 /// </summary>
-internal class SubmitMessageValidator : AbstractValidator<SubmitMessage>
+public class SubmitMessageValidator : AbstractValidator<SubmitMessage>
 {
     public SubmitMessageValidator()
     {

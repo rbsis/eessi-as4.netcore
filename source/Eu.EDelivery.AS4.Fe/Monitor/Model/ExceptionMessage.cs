@@ -7,7 +7,7 @@ namespace Eu.EDelivery.AS4.Fe.Monitor.Model;
 /// </summary>
 public class ExceptionMessage
 {
-    private string? pMode;
+    private string? _pMode;
 
     /// <summary>
     /// Gets or sets the identifier.
@@ -53,14 +53,14 @@ public class ExceptionMessage
     /// </value>
     public string? PMode
     {
-        get { return pMode; }
+        get { return _pMode; }
         set
         {
             if (!string.IsNullOrEmpty(value) && value.Contains("xml", StringComparison.CurrentCultureIgnoreCase))
             {
                 Hash = value.GetMd5Hash();
             }
-            pMode = value;
+            _pMode = value;
         }
     }
 

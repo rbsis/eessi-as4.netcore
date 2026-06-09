@@ -6,12 +6,12 @@ public static class SqlConnectionBuilder
 {
     public static void Build(string provider, string connectionString, DbContextOptionsBuilder builder)
     {
-        if (provider.ToLower() == "sqlite")
+        if (provider.Equals("sqlite", StringComparison.CurrentCultureIgnoreCase))
         {
             builder.UseSqlite(connectionString);
             return;
         }
-        else if (provider.ToLower() == "sqlserver")
+        else if (provider.Equals("sqlserver", StringComparison.CurrentCultureIgnoreCase))
         {
             builder.UseSqlServer(connectionString);
             return;

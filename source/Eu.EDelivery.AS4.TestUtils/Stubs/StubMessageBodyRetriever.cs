@@ -1,7 +1,7 @@
 ﻿using Eu.EDelivery.AS4.Model.Core;
 using Eu.EDelivery.AS4.Repositories;
 
-namespace Eu.EDelivery.AS4.UnitTests.Repositories;
+namespace Eu.EDelivery.AS4.TestUtils.Stubs;
 
 public class StubMessageBodyRetriever : IAS4MessageBodyStore
 {
@@ -55,22 +55,5 @@ public class StubMessageBodyRetriever : IAS4MessageBodyStore
     public void UpdateAS4Message(string location, AS4Message message)
     {
         throw new NotImplementedException();
-    }
-}
-
-public class StubMessageBodyRetrieverFacts
-{
-    [Fact]
-    public async Task ReturnsFixedStreamAsync()
-    {
-        // Arrange
-        var expectedStream = Stream.Null;
-        var sut = new StubMessageBodyRetriever(() => expectedStream);
-
-        // Act
-        var actualStream = await sut.LoadMessageBodyAsync(location: null, cancellation: CancellationToken.None);
-
-        // Assert
-        Assert.Equal(expectedStream, actualStream);
     }
 }

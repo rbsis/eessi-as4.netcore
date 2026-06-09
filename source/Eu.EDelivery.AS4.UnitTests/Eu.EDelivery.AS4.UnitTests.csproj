@@ -14,11 +14,6 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <Compile Remove="Servicehandler\Builder\GivenReceiverBuilderFacts.cs" />
-      <Compile Remove="Servicehandler\GivenKernelFacts.cs" />
-    </ItemGroup>
-
-    <ItemGroup>
         <None Remove="Resources\as4-encrypted-envelope.xml" />
         <None Remove="Resources\as4-soap-pullrequest.xml" />
         <None Remove="Resources\as4-soap-signed-encrypted-message-with-extra-hashtag.xml" />
@@ -100,5 +95,6 @@
         <Using Include="FsCheck" />
         <Using Include="FsCheck.Fluent" />
         <Using Include="FsCheck.Xunit" />
+        <Using Include="Eu.EDelivery.AS4.TestUtils" />
     </ItemGroup>
 </Project>

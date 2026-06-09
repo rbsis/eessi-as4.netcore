@@ -22,7 +22,7 @@ namespace Eu.EDelivery.AS4.Services;
 /// Repository to expose Data store related operations
 /// for the Update Data store Steps
 /// </summary>
-internal class InMessageService : IInMessageService
+public class InMessageService : IInMessageService
 {
     private readonly ILogger<InMessageService> _logger;
     private readonly IConfig _configuration;

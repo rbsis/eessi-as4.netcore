@@ -1,6 +1,6 @@
 ﻿using System.Xml;
 using Eu.EDelivery.AS4.Security.References;
-using Eu.EDelivery.AS4.UnitTests.Common;
+using Eu.EDelivery.AS4.TestUtils.Stubs;
 
 namespace Eu.EDelivery.AS4.UnitTests.Security.References;
 

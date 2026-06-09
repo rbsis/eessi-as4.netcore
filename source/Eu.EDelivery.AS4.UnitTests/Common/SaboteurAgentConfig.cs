@@ -1,4 +1,5 @@
 ﻿using Eu.EDelivery.AS4.Agents;
+using Eu.EDelivery.AS4.TestUtils.Stubs;
 
 namespace Eu.EDelivery.AS4.UnitTests.Common;
 

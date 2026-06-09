@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Eu.EDelivery.AS4.Exceptions.Handlers;
 
-internal class OutboundExceptionHandler : IAgentExceptionHandler
+public class OutboundExceptionHandler : IAgentExceptionHandler
 {
     private readonly ILogger<OutboundExceptionHandler> _logger;
     private readonly IExceptionService _exceptionService;

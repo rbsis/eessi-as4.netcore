@@ -66,7 +66,7 @@ public class SendingProcessingMode : IPMode, ICloneable
         get => MessageHandling as PushConfiguration;
         set
         {
-            if (value is not null)
+            if (value is not null || MessageHandlingType == MessageSendHandlingChoiceType.PushConfiguration)
             {
                 MessageHandling = value;
             }
@@ -80,7 +80,7 @@ public class SendingProcessingMode : IPMode, ICloneable
         get => MessageHandling as DynamicDiscoveryConfiguration;
         set
         {
-            if (value is not null)
+            if (value is not null || MessageHandlingType == MessageSendHandlingChoiceType.DynamicDiscovery)
             {
                 MessageHandling = value;
             }

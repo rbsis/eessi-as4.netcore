@@ -17,7 +17,7 @@ namespace Eu.EDelivery.AS4.Services;
 /// Service to expose db operations related to messages that needs to be send out, 
 /// either directly via the Send Agent or via the Outbound Processing Agent.
 /// </summary>
-internal class OutMessageService : IOutMessageService
+public class OutMessageService : IOutMessageService
 {
     private readonly ILogger<OutMessageService> _logger;
     private readonly IDatastoreRepository _repository;

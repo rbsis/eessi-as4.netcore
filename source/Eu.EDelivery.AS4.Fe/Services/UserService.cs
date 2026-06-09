@@ -41,6 +41,7 @@ public class UserService : IUserService
         using var datastoreContext = await _contextFactory.CreateDbContextAsync(cancellationToken);
         return await datastoreContext.Users
             .AsNoTracking()
+            .Include(x => x.Claims)
             .Select(u => _mapper.Map(u))
             .ToListAsync(cancellationToken);
     }
@@ -53,7 +54,6 @@ public class UserService : IUserService
     /// <returns></returns>
     public async Task CreateAsync(NewUser user, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(user);
         ArgumentException.ThrowIfNullOrEmpty(user.Name, nameof(user.Name));
         ArgumentException.ThrowIfNullOrEmpty(user.Password, nameof(user.Password));
 

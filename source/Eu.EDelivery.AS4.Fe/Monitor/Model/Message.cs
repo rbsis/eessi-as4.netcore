@@ -147,11 +147,11 @@ public class Message
     /// <value>
     /// The p mode.
     /// </value>
-    public string PMode
+    public string? PMode
     {
         set
         {
-            if (!string.IsNullOrEmpty(value) && value.ToLower().Contains("xml"))
+            if (!string.IsNullOrEmpty(value) && value.Contains("xml", StringComparison.CurrentCultureIgnoreCase))
             {
                 Hash = value.GetMd5Hash();
             }

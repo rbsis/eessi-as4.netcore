@@ -1,47 +1,34 @@
-﻿using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
-using AutoMapper;
-using Eu.EDelivery.AS4.Common;
-using Eu.EDelivery.AS4.Entities;
-using Eu.EDelivery.AS4.Fe.Monitor;
-using Eu.EDelivery.AS4.Fe.Pmodes;
-using Eu.EDelivery.AS4.Fe.Settings;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
-using NSubstitute;
-using Xunit;
-using System;
-using System.Text;
+﻿using Eu.EDelivery.AS4.Entities;
+using Eu.EDelivery.AS4.Fe.Mappers;
 using Eu.EDelivery.AS4.Fe.Monitor.Model;
-using Eu.EDelivery.AS4.Model.Core;
+using Eu.EDelivery.AS4.Fe.Pmodes;
+using Eu.EDelivery.AS4.Fe.Services;
+using Eu.EDelivery.AS4.Fe.Settings;
 using Eu.EDelivery.AS4.Model.PMode;
 using Eu.EDelivery.AS4.Repositories;
 using Eu.EDelivery.AS4.Serialization;
-using Eu.EDelivery.AS4.UnitTests.Common;
-using Eu.EDelivery.AS4.UnitTests.Repositories;
+using Eu.EDelivery.AS4.TestUtils.Stubs;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using NSubstitute;
 
-namespace Eu.EDelivery.AS4.Fe.UnitTests
+namespace Eu.EDelivery.AS4.Fe.UnitTests;
+
+public class MonitorServiceTests : BaseTest, IDbContextFactory<DatastoreContext>
 {
-    public class MonitorServiceTests : BaseTest
-    {
-        private readonly string InEbmsMessageId1 = "ebmsMessageId1";
-        private readonly string InEbmsMessageId2 = "InEbmsMessageId2";
-        private readonly string InEbmsRefToMessageId1 = "ebmsRefToMessageId1";
-        private readonly string InEbmsRefToMessageId2 = "InEbmsRefToMessageId2";
-        private readonly string OutEbmsMessageId1 = "OutEbmsMessageId1";
-        private readonly string OutEbmsMessageId2 = "OutEbmsMessageId2";
-        private readonly string OutEbmsRefToMessageId1 = "OutEbmsRefToMessageId1";
-        private readonly string OutEbmsRefToMessageId2 = "OutEbmsRefToMessageId2";
-        private readonly string InException = "THIS IS EXCEPTION 1";
-        private readonly string MessageLocation = "some-location";
-        private readonly ReceivingProcessingMode pmode;
-        private readonly string MessageBody1 = "TEST";
-        private DatastoreContext datastoreContext;
-        private MonitorService monitorService;
-        private DbContextOptions<DatastoreContext> options;
-        protected IDatastoreRepository DatastoreRepository;
-        private const string Exception = @"[9acd3265 - cd3a - 4903 - 9ec4 - 694fc4433c34@mindertestbed.org]Decryption failed
+    private const string InEbmsMessageId1 = "ebmsMessageId1";
+    private const string InEbmsMessageId2 = "InEbmsMessageId2";
+    private const string InEbmsRefToMessageId1 = "ebmsRefToMessageId1";
+    private const string InEbmsRefToMessageId2 = "InEbmsRefToMessageId2";
+    private const string OutEbmsMessageId1 = "OutEbmsMessageId1";
+    private const string OutEbmsMessageId2 = "OutEbmsMessageId2";
+    private const string OutEbmsRefToMessageId1 = "OutEbmsRefToMessageId1";
+    private const string OutEbmsRefToMessageId2 = "OutEbmsRefToMessageId2";
+    private const string InException = "THIS IS EXCEPTION 1";
+    private const string MessageLocation = "some-location";
+    private const string MessageBody1 = "TEST";
+    private const string Exception = @"[9acd3265 - cd3a - 4903 - 9ec4 - 694fc4433c34@mindertestbed.org]Decryption failed
    at Eu.EDelivery.AS4.Steps.Receive.DecryptAS4MessageStep.TryDecryptAS4Message() in AS4.NET\source\Steps\Eu.EDelivery.AS4.Steps\Receive\DecryptAS4MessageStep.cs:line 109
    at Eu.EDelivery.AS4.Steps.Receive.DecryptAS4MessageStep.ExecuteAsync(InternalMessage internalMessage, CancellationToken cancellationToken) in AS4.NET\source\Steps\Eu.EDelivery.AS4.Steps\Receive\DecryptAS4MessageStep.cs:line 66
    at Eu.EDelivery.AS4.Steps.CompositeStep.<ExecuteAsync>d__2.MoveNext() in AS4.NET\source\AS4\Eu.EDelivery.AS4\Steps\CompositeStep.cs:line 43
@@ -57,543 +44,501 @@ Failed to decrypt data element
    at Eu.EDelivery.AS4.Steps.Receive.DecryptAS4MessageStep.TryDecryptAS4Message() in AS4.NET\source\Steps\Eu.EDelivery.AS4.Steps\Receive\DecryptAS4MessageStep.cs:line 104
 ";
 
-        public MonitorServiceTests()
+    private readonly ReceivingProcessingMode _pmode;
+    private readonly MonitorService _sut;
+    private readonly DbContextOptions<DatastoreContext> _options;
+
+    protected MonitorServiceTests()
+    {
+        _pmode = new ReceivingProcessingMode() { Id = "monitorServiceTestPModeId" };
+
+        _options = new DbContextOptionsBuilder<DatastoreContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+
+        SetupDataStore();
+
+        var datastoreRepository = Substitute.For<IDatastoreRepository>();
+        var bodyStore = new StubMessageBodyRetriever(() => Stream.Null);
+        var mapper = new MessageMapper();
+
+        _sut = new MonitorService(
+            this,
+            SetupPmodeSource(),
+            datastoreRepository,
+            bodyStore,
+            mapper,
+            mapper,
+            mapper,
+            mapper);
+    }
+
+    public DatastoreContext CreateDbContext()
+    {
+        return new DatastoreContext(NullLogger<DatastoreContext>.Instance, StubConfig.Default, _options);
+    }
+
+    private static As4PmodeSource SetupPmodeSource()
+    {
+        var sourceOptions = Substitute.For<IOptionsSnapshot<PmodeSettings>>();
+        return new As4PmodeSource(StubConfig.Default, sourceOptions);
+    }
+
+    protected virtual void SetupDataStore()
+    {
+        using var context = CreateDbContext();
+        context.Database.EnsureCreated();
+
+        var pmodeString = AS4XmlSerializer.ToString(_pmode);
+        var pmodeId = _pmode.Id;
+
         {
-            pmode = new ReceivingProcessingMode() { Id = "monitorServiceTestPModeId" };
+            var message = new InMessage(ebmsMessageId: InEbmsMessageId1)
+            {
+                EbmsRefToMessageId = InEbmsRefToMessageId1,
+                InsertionTime = DateTime.UtcNow.AddMinutes(-1),
+            };
+            message.SetStatus(InStatus.Created);
+            message.SetPModeInformation(pmodeId, pmodeString);
+            context.InMessages.Add(message);
         }
 
-        private MonitorServiceTests Setup()
         {
-            Cleanup();
-
-            options = new DbContextOptionsBuilder<DatastoreContext>()
-                .UseInMemoryDatabase(Guid.NewGuid().ToString())
-                .Options;
-            using (var store = new DatastoreContext(options, StubConfig.Default))
+            var message = new InMessage(ebmsMessageId: InEbmsMessageId2)
             {
-                store.Database.EnsureCreated();
+                EbmsRefToMessageId = InEbmsRefToMessageId2,
+                InsertionTime = DateTime.UtcNow.AddMinutes(-1)
+            };
+            message.SetStatus(InStatus.Received);
+            context.InMessages.Add(message);
+        }
+
+        {
+            var message = new OutMessage(OutEbmsMessageId1)
+            {
+                EbmsRefToMessageId = OutEbmsRefToMessageId1,
+                InsertionTime = DateTime.UtcNow.AddMinutes(-1)
+            };
+            message.SetStatus(OutStatus.Created);
+
+            context.OutMessages.Add(message);
+        }
+
+        {
+            var message = new OutMessage(OutEbmsMessageId2)
+            {
+                EbmsRefToMessageId = OutEbmsRefToMessageId2,
+
+                InsertionTime = DateTime.UtcNow.AddMinutes(-1)
+            };
+            message.SetStatus(OutStatus.Created);
+            context.OutMessages.Add(message);
+        }
+
+        var inEx1 = Entities.InException.ForEbmsMessageId(InEbmsMessageId1, InException);
+        inEx1.InsertionTime = DateTime.UtcNow.AddMinutes(-1);
+        context.InExceptions.Add(inEx1);
+
+        var inEx2 = Entities.InException.ForEbmsMessageId(InEbmsMessageId1, InException);
+        inEx2.InsertionTime = DateTime.UtcNow.AddMinutes(-1);
+        context.InExceptions.Add(inEx2);
+
+        var inEx3 = Entities.InException.ForMessageBody(MessageLocation, InException);
+        inEx3.InsertionTime = DateTime.UtcNow.AddMinutes(-1);
+        context.InExceptions.Add(inEx3);
+
+        var outEx1 = Entities.OutException.ForEbmsMessageId(OutEbmsRefToMessageId1, InException);
+        outEx1.InsertionTime = DateTime.UtcNow.AddMinutes(-1);
+        context.OutExceptions.Add(outEx1);
+
+        var outEx2 = OutException.ForEbmsMessageId(InEbmsRefToMessageId1, Exception);
+        outEx2.InsertionTime = DateTime.UtcNow.AddMinutes(-1);
+        context.OutExceptions.Add(outEx2);
+
+        var outEx3 = OutException.ForMessageBody(MessageLocation, Exception);
+        outEx3.InsertionTime = DateTime.UtcNow.AddMinutes(-1);
+        context.OutExceptions.Add(outEx3);
+
+        context.SaveChanges();
+
+        foreach (var inMessage in context.InMessages)
+        {
+            inMessage.SetPModeInformation(pmodeId, pmodeString);
+        }
+
+        foreach (var outMessage in context.OutMessages)
+        {
+            outMessage.SetPModeInformation(pmodeId, pmodeString);
+        }
+
+        foreach (var inException in context.InExceptions)
+        {
+            inException.SetPModeInformation(pmodeId, pmodeString);
+        }
+
+        foreach (var outException in context.OutExceptions)
+        {
+            outException.SetPModeInformation(pmodeId, pmodeString);
+        }
+
+        context.SaveChanges();
+    }
+
+    public class GetMessages : MonitorServiceTests
+    {
+        [Fact]
+        public async Task Throws_Exception_When_No_Direction_Is_Specified()
+        {
+            await ExpectExceptionAsync(() => _sut.GetMessagesAsync(new MessageFilter() { Direction = [] }, TestContext.Current.CancellationToken), typeof(ArgumentException));
+        }
+
+        [Fact]
+        public async Task Throws_Exception_When_Parameter_Is_Null()
+        {
+            await ExpectExceptionAsync(() => _sut.GetMessagesAsync(null, TestContext.Current.CancellationToken), typeof(ArgumentNullException));
+        }
+
+        [Fact]
+        public async Task Gets_All_In_And_Outbound_Messages()
+        {
+            var filter = new MessageFilter()
+            {
+                Direction = [Direction.Inbound, Direction.Outbound]
+            };
+
+            var result = await _sut.GetMessagesAsync(filter, TestContext.Current.CancellationToken);
+
+            Assert.Equal(4, result.Messages.Count());
+            Assert.Equal(2, result.Messages.Count(x => x.Direction == Direction.Inbound));
+            Assert.Equal(2, result.Messages.Count(x => x.Direction == Direction.Outbound));
+        }
+
+        [Fact]
+        public async Task Get_Only_Inboud_Messages()
+        {
+            var filter = new MessageFilter
+            {
+                Direction = [Direction.Inbound]
+            };
+            var result = await _sut.GetMessagesAsync(filter, TestContext.Current.CancellationToken);
+
+            Assert.Equal(2, result.Messages.Count());
+            Assert.True(result.Messages.All(message => message.Direction == Direction.Inbound));
+        }
+
+        [Fact]
+        public async Task HasExceptions_Of_Message_Should_Be_True_When_Exceptions_Are_Available()
+        {
+            var result = await _sut.GetMessagesAsync(new MessageFilter(), TestContext.Current.CancellationToken);
+
+            Assert.True(result.Messages.First(msg => msg.EbmsMessageId == InEbmsMessageId1).HasExceptions);
+            Assert.False(result.Messages.First(msg => msg.EbmsRefToMessageId == InEbmsRefToMessageId2).HasExceptions);
+        }
+
+        [Fact]
+        public async Task No_Filter_Should_Return_All_Messages()
+        {
+            var filter = new MessageFilter();
+            var result = await _sut.GetMessagesAsync(filter, TestContext.Current.CancellationToken);
+
+            Assert.Equal(1, result.Page);
+            Assert.Equal(4, result.Total);
+        }
+
+        [Fact]
+        public async Task Pmode_Should_Only_Contain_Pmode_Number()
+        {
+            var result = await _sut.GetMessagesAsync(new MessageFilter(), TestContext.Current.CancellationToken);
+            var message = result.Messages.FirstOrDefault(x => x.EbmsRefToMessageId == InEbmsRefToMessageId1);
+
+            Assert.NotNull(message);
+            Assert.Equal(_pmode.Id, message.PModeId);
+        }
+
+        [Fact]
+        public async Task Should_Filter_Data_When_Existing_MessageId_Is_Supplied()
+        {
+            var filter = new MessageFilter
+            {
+                EbmsRefToMessageId = InEbmsRefToMessageId1
+            };
+
+            var result = await _sut.GetMessagesAsync(filter, TestContext.Current.CancellationToken);
+
+            Assert.Equal(1, result.Page);
+            Assert.Equal(1, result.Total);
+        }
+
+        [Fact]
+        public async Task Results_Should_Have_The_Inboud_Direction()
+        {
+            var result = await _sut.GetMessagesAsync(new MessageFilter()
+            {
+                Direction = [Direction.Inbound]
+            }, TestContext.Current.CancellationToken);
+
+            Assert.True(result.Messages.All(message => message.Direction == Direction.Inbound));
+        }
+
+        [Fact]
+        public async Task Results_Should_Have_The_Outbound_Direction()
+        {
+            var result = await _sut.GetMessagesAsync(new MessageFilter()
+            {
+                Direction = [Direction.Outbound]
+            }, TestContext.Current.CancellationToken);
+
+            Assert.True(result.Messages.All(message => message.Direction == Direction.Outbound));
+        }
+
+        [Fact]
+        public async Task Status_Should_Be_Mapped()
+        {
+            var result = await _sut.GetMessagesAsync(new MessageFilter(), TestContext.Current.CancellationToken);
+            Assert.True(result.Messages.All(msg => !string.IsNullOrEmpty(msg.Status)));
+        }
+
+        public class GetPmodeNumber : MonitorServiceTests
+        {
+            [Fact]
+            public void Returns_Pmode_Number_From_Pmode_String()
+            {
+                var pmodeContent = File.ReadAllText(@"receivingpmode.xml");
+                var result = _sut.GetPmodeNumber(pmodeContent);
+                Assert.Equal("8.1.2-basePmode", result);
             }
-            SetupDataStore();
-            datastoreContext = new DatastoreContext(options, StubConfig.Default);
+        }
 
-            var mapperConfig = new MapperConfiguration(cfg =>
+        public class GetExceptions : MonitorServiceTests
+        {
+            [Fact]
+            public async Task Throws_Exception_When_Parameters_Is_Null()
             {
-                cfg.AddProfile(new SettingsAutoMapper());
-                cfg.AddProfile(new MonitorAutoMapper());
-            });
+                await ExpectExceptionAsync(() => _sut.GetExceptionsAsync(null, TestContext.Current.CancellationToken), typeof(ArgumentNullException));
+            }
 
-            DatastoreRepository = Substitute.For<IDatastoreRepository>();
-            var bodyStore = new StubMessageBodyRetriever(() => Stream.Null);
-            monitorService = new MonitorService(datastoreContext, SetupPmodeSource(), DatastoreRepository, bodyStore, mapperConfig);
-
-            return this;
-        }
-
-        private static As4PmodeSource SetupPmodeSource()
-        {
-            var sourceOptions = Substitute.For<IOptionsSnapshot<PmodeSettings>>();
-            var pmodeSource = new As4PmodeSource(sourceOptions);
-            return pmodeSource;
-        }
-
-        private void Cleanup()
-        {
-            datastoreContext?.Database?.EnsureDeleted();
-            datastoreContext?.Dispose();
-        }
-
-        protected virtual void SetupDataStore()
-        {
-            using (datastoreContext = new DatastoreContext(options, StubConfig.Default))
+            [Fact]
+            public async Task Filter_Should_Filter_The_Data()
             {
-                string pmodeString = AS4XmlSerializer.ToString(pmode);
-                string pmodeId = pmode.Id;
-
+                var filter = new ExceptionFilter()
                 {
-                    var message = new InMessage(ebmsMessageId: InEbmsMessageId1)
-                    {
-                        EbmsRefToMessageId = InEbmsRefToMessageId1,
-                        InsertionTime = DateTime.UtcNow.AddMinutes(-1),
-                    };
-                    message.SetStatus(InStatus.Created);
-                    message.SetPModeInformation(pmodeId, pmodeString);
-                    datastoreContext.InMessages.Add(message);
-                }
+                    EbmsRefToMessageId = InEbmsMessageId1,
+                    Direction = [Direction.Inbound],
+                };
+                var result = await _sut.GetExceptionsAsync(filter, TestContext.Current.CancellationToken);
 
+                Assert.Equal(2, result.Messages.Count());
+                Assert.Equal(InEbmsMessageId1, result.Messages.First().EbmsRefToMessageId);
+            }
+
+            [Fact]
+            public async Task Filter_Should_Return_Nothing_When_No_Match()
+            {
+                var filter = new ExceptionFilter
                 {
-                    var message = new InMessage(ebmsMessageId: InEbmsMessageId2)
-                    {
-                        EbmsRefToMessageId = InEbmsRefToMessageId2,
-                        InsertionTime = DateTime.UtcNow.AddMinutes(-1)
-                    };
-                    message.SetStatus(InStatus.Received);
-                    datastoreContext.InMessages.Add(message);
-                }
+                    EbmsRefToMessageId = "IDONTEXIST"
+                };
+                var result = await _sut.GetExceptionsAsync(filter, TestContext.Current.CancellationToken);
 
+                Assert.False(result.Messages.Any());
+            }
+
+            [Fact]
+            public async Task Return_All_Directions()
+            {
+                var result = await _sut.GetExceptionsAsync(new ExceptionFilter(), TestContext.Current.CancellationToken);
+
+                Assert.Equal(6, result.Messages.Count());
+            }
+
+            [Fact]
+            public async Task Throws_Exception_When_No_Direction()
+            {
+                var result = await ExpectExceptionAsync(() => _sut.GetExceptionsAsync(new ExceptionFilter() { Direction = [] }, TestContext.Current.CancellationToken),
+                    typeof(ArgumentException));
+            }
+
+            [Fact]
+            public async Task Exception_Short_Should_Not_Contain_The_Full_Exception()
+            {
+                var result = await _sut.GetExceptionsAsync(new ExceptionFilter
                 {
-                    var message = new OutMessage(OutEbmsMessageId1)
-                    {
-                        EbmsRefToMessageId = OutEbmsRefToMessageId1,
-                        InsertionTime = DateTime.UtcNow.AddMinutes(-1)
-                    };
-                    message.SetStatus(OutStatus.Created);
+                    EbmsRefToMessageId = InEbmsRefToMessageId1
+                }, TestContext.Current.CancellationToken);
 
-                    datastoreContext.OutMessages.Add(message);
-                }
+                Assert.Equal("Decryption failed", result.Messages.First().ExceptionShort);
+            }
+        }
 
+        public class Hash : MonitorServiceTests
+        {
+            [Fact]
+            public async Task Message_Should_Contain_Md5_Hash()
+            {
+                var inMessageResult = await _sut.GetMessagesAsync(new MessageFilter { Direction = [Direction.Inbound] }, TestContext.Current.CancellationToken);
+                var outMessageResult = await _sut.GetMessagesAsync(new MessageFilter { Direction = [Direction.Outbound] }, TestContext.Current.CancellationToken);
+
+                Assert.True(inMessageResult.Messages.All(msg => !string.IsNullOrEmpty(msg.Hash)));
+                Assert.True(outMessageResult.Messages.All(msg => !string.IsNullOrEmpty(msg.Hash)));
+            }
+        }
+
+        public class GetRelatedMessages : MonitorServiceTests
+        {
+            private readonly string _outEbmsMessage3 = Guid.NewGuid().ToString();
+            private const string ForwardedMessageId = "ForwardedMessage1";
+
+            protected override void SetupDataStore()
+            {
+                using var context = CreateDbContext();
+                context.Database.EnsureCreated();
+
+                context.InMessages.Add(new InMessage(ebmsMessageId: InEbmsMessageId1)
                 {
-                    var message = new OutMessage(OutEbmsMessageId2)
-                    {
-                        EbmsRefToMessageId = OutEbmsRefToMessageId2,
+                    EbmsRefToMessageId = InEbmsRefToMessageId1,
+                });
+                context.InMessages.Add(new InMessage(ebmsMessageId: InEbmsRefToMessageId1));
 
-                        InsertionTime = DateTime.UtcNow.AddMinutes(-1)
-                    };
-                    message.SetStatus(OutStatus.Created);
-                    datastoreContext.OutMessages.Add(message);
-                }
+                context.OutMessages.Add(new OutMessage(ebmsMessageId: InEbmsRefToMessageId1));
 
-                InException inEx1 = Entities.InException.ForEbmsMessageId(InEbmsMessageId1, InException);
-                inEx1.InsertionTime = DateTime.UtcNow.AddMinutes(-1);
-                datastoreContext.InExceptions.Add(inEx1);
+                context.InMessages.Add(new InMessage(ebmsMessageId: "RANDOM")
+                {
+                    EbmsRefToMessageId = InEbmsMessageId1,
+                });
+                context.InMessages.Add(new InMessage(ebmsMessageId: InEbmsMessageId2));
 
-                InException inEx2 = Entities.InException.ForEbmsMessageId(InEbmsMessageId1, InException);
-                inEx2.InsertionTime = DateTime.UtcNow.AddMinutes(-1);
-                datastoreContext.InExceptions.Add(inEx2);
+                context.OutMessages.Add(new OutMessage(ebmsMessageId: OutEbmsMessageId1)
+                {
+                    EbmsRefToMessageId = OutEbmsRefToMessageId1
+                });
+                context.OutMessages.Add(new OutMessage(ebmsMessageId: OutEbmsMessageId2)
+                {
+                    EbmsRefToMessageId = OutEbmsMessageId1
+                });
+                context.InMessages.Add(new InMessage(ebmsMessageId: Guid.NewGuid().ToString())
+                {
+                    EbmsRefToMessageId = OutEbmsMessageId1
+                });
+                context.InMessages.Add(new InMessage(ebmsMessageId: OutEbmsRefToMessageId1)
+                {
+                    EbmsRefToMessageId = Guid.NewGuid().ToString()
+                });
 
-                InException inEx3 = Entities.InException.ForMessageBody(MessageLocation, InException);
-                inEx3.InsertionTime = DateTime.UtcNow.AddMinutes(-1);
-                datastoreContext.InExceptions.Add(inEx3);
+                context.OutMessages.Add(new OutMessage(ebmsMessageId: _outEbmsMessage3));
 
-                OutException outEx1 = Entities.OutException.ForEbmsMessageId(OutEbmsRefToMessageId1, InException);
-                outEx1.InsertionTime = DateTime.UtcNow.AddMinutes(-1);
-                datastoreContext.OutExceptions.Add(outEx1);
+                context.OutMessages.Add(new OutMessage(ebmsMessageId: Guid.NewGuid().ToString())
+                {
+                    EbmsRefToMessageId = _outEbmsMessage3
+                });
+                context.InMessages.Add(new InMessage(ebmsMessageId: Guid.NewGuid().ToString())
+                {
+                    EbmsRefToMessageId = _outEbmsMessage3
+                });
 
-                OutException outEx2 = OutException.ForEbmsMessageId(InEbmsRefToMessageId1, Exception);
-                outEx2.InsertionTime = DateTime.UtcNow.AddMinutes(-1);
-                datastoreContext.OutExceptions.Add(outEx2);
+                context.InMessages.Add(new InMessage(ebmsMessageId: Guid.NewGuid().ToString()));
 
-                OutException outEx3 = OutException.ForMessageBody(MessageLocation, Exception);
-                outEx3.InsertionTime = DateTime.UtcNow.AddMinutes(-1);
-                datastoreContext.OutExceptions.Add(outEx3);
+                context.OutMessages.Add(new OutMessage(Guid.NewGuid().ToString()));
 
-                datastoreContext.SaveChanges();
+                // Forwareded message
+                var newinMessage = new InMessage(ForwardedMessageId)
+                {
+                    Operation = Operation.Forwarded
+                };
+                context.InMessages.Add(newinMessage);
+                var newOutMessage = new OutMessage(ForwardedMessageId)
+                {
+                    Operation = Operation.ToBeSent
+                };
+                context.OutMessages.Add(newOutMessage);
 
-                foreach (var inMessage in datastoreContext.InMessages)
+                var pmodeId = _pmode.Id;
+                var pmodeString = AS4XmlSerializer.ToString(_pmode);
+
+                foreach (var inMessage in context.InMessages)
                 {
                     inMessage.SetPModeInformation(pmodeId, pmodeString);
                 }
-
-                foreach (var outMessage in datastoreContext.OutMessages)
+                foreach (var outMessage in context.OutMessages)
                 {
                     outMessage.SetPModeInformation(pmodeId, pmodeString);
                 }
 
-                foreach (var inException in datastoreContext.InExceptions)
-                {
-                    inException.SetPModeInformation(pmodeId, pmodeString);
-                }
+                context.SaveChanges();
+            }
 
-                foreach (var outException in datastoreContext.OutExceptions)
-                {
-                    outException.SetPModeInformation(pmodeId, pmodeString);
-                }
+            [Fact]
+            public async Task Returns_All_Related_Messages()
+            {
+                var result = await _sut.GetRelatedMessagesAsync(Direction.Inbound, InEbmsMessageId1, TestContext.Current.CancellationToken);
+                Assert.Equal(3, result.Messages.Count());
+            }
 
-                datastoreContext.SaveChanges();
+            [Fact]
+            public async Task OutMessages_Should_Return_All_Related_Messages()
+            {
+                var result = await _sut.GetRelatedMessagesAsync(Direction.Outbound, OutEbmsMessageId1, TestContext.Current.CancellationToken);
+                Assert.Equal(3, result.Messages.Count());
+            }
+
+            [Fact]
+            public async Task OutMessages_Without_RefTo_Message_Returns_Related_Messages()
+            {
+                var result = await _sut.GetRelatedMessagesAsync(Direction.Outbound, _outEbmsMessage3, TestContext.Current.CancellationToken);
+                Assert.Equal(2, result.Messages.Count());
+            }
+
+            [Fact]
+            public async Task Throws_Exception_When_Parames_Are_Null()
+            {
+                await Assert.ThrowsAsync<ArgumentException>(() => _sut.GetRelatedMessagesAsync(Direction.Outbound, "", TestContext.Current.CancellationToken));
+            }
+
+            [Fact]
+            public async Task ForwardedMessage_ShouldBeReturned()
+            {
+                var result = await _sut.GetRelatedMessagesAsync(Direction.Inbound, ForwardedMessageId, TestContext.Current.CancellationToken);
+                Assert.NotNull(result);
+                Assert.Single(result.Messages);
             }
         }
 
-        public class GetMessages : MonitorServiceTests
+        public class DownloadMessageBody : MonitorServiceTests
         {
             [Fact]
-            public async Task Throws_Business_Exception_When_No_Direction_Is_Specified()
+            public async Task Throws_Exception_When_Parameters_Are_Invalid()
             {
-                await Setup()
-                    .ExpectExceptionAsync(() => monitorService.GetMessages(new MessageFilter() { Direction = new Direction[] { } }), typeof(BusinessException));
+                await ExpectExceptionAsync(() => _sut.DownloadMessageBodyAsync(Direction.Inbound, 0, TestContext.Current.CancellationToken), typeof(ArgumentOutOfRangeException));
             }
+        }
 
+        public class DownloadExceptionBody : MonitorServiceTests
+        {
             [Fact]
-            public async Task Throws_Exception_When_Direction_Property_Is_Null()
+            public async Task Throws_Exception_When_Parameters_Are_Invalid()
             {
-                await Setup().ExpectExceptionAsync(() => monitorService.GetMessages(new MessageFilter { Direction = null }), typeof(ArgumentNullException));
+                await ExpectExceptionAsync(() => _sut.DownloadExceptionMessageBodyAsync(Direction.Inbound, 0, TestContext.Current.CancellationToken), typeof(ArgumentOutOfRangeException));
             }
 
-            [Fact]
-            public async Task Throws_Exception_When_Parameter_Is_Null()
+            [Theory]
+            [InlineData(Direction.Inbound)]
+            [InlineData(Direction.Outbound)]
+            public async Task Gets_The_MesageBody(Direction direction)
             {
-                await Setup()
-                    .ExpectExceptionAsync(() => monitorService.GetMessages(null), typeof(ArgumentNullException));
-            }
+                using var context = CreateDbContext();
 
-            [Fact]
-            public async Task Gets_All_In_And_Outbound_Messages()
-            {
-                var filter = new MessageFilter()
+                long id = 0;
+                switch (direction)
                 {
-                    Direction = new[] { Direction.Inbound, Direction.Outbound }
-                };
-
-                var result = await Setup().monitorService.GetMessages(filter);
-
-                Assert.True(result.Messages.Count() == 4, "Count should be 4");
-                Assert.True(result.Messages.Count(x => x.Direction == Direction.Inbound) == 2, "Expected 2 inbound messages");
-                Assert.True(result.Messages.Count(x => x.Direction == Direction.Outbound) == 2, "Expected 2 outbound messages");
-            }
-
-            [Fact]
-            public async Task Get_Only_Inboud_Messages()
-            {
-                var filter = new MessageFilter
-                {
-                    Direction = new[] { Direction.Inbound }
-                };
-                var result = await Setup().monitorService.GetMessages(filter);
-
-                Assert.True(result.Messages.Count() == 2);
-                Assert.True(result.Messages.All(message => message.Direction == Direction.Inbound));
-            }
-
-            [Fact]
-            public async Task HasExceptions_Of_Message_Should_Be_True_When_Exceptions_Are_Available()
-            {
-                var result = await Setup().monitorService.GetMessages(new MessageFilter());
-
-                Assert.True(result.Messages.FirstOrDefault(msg => msg.EbmsMessageId == InEbmsMessageId1).HasExceptions);
-                Assert.False(result.Messages.FirstOrDefault(msg => msg.EbmsRefToMessageId == InEbmsRefToMessageId2).HasExceptions);
-
-                Cleanup();
-            }
-
-            [Fact]
-            public async Task No_Filter_Should_Return_All_Messages()
-            {
-                var filter = new MessageFilter();
-                var result = await Setup().monitorService.GetMessages(filter);
-
-                Assert.True(result.Page == 1);
-                Assert.True(result.Total == 4);
-
-                Cleanup();
-            }
-
-            [Fact]
-            public async Task Pmode_Should_Only_Contain_Pmode_Number()
-            {
-                var result = await Setup().monitorService.GetMessages(new MessageFilter());
-
-                var message = result.Messages.FirstOrDefault(x => x.EbmsRefToMessageId == InEbmsRefToMessageId1);
-
-                Assert.NotNull(message);
-
-                Assert.True(message.PModeId == pmode.Id);
-
-                Cleanup();
-            }
-
-            [Fact]
-            public async Task Should_Filter_Data_When_Existing_MessageId_Is_Supplied()
-            {
-                var filter = new MessageFilter
-                {
-                    EbmsRefToMessageId = InEbmsRefToMessageId1
-                };
-
-                var result = await Setup().monitorService.GetMessages(filter);
-
-                Assert.True(result.Page == 1);
-                Assert.True(result.Total == 1);
-
-                Cleanup();
-            }
-
-            [Fact]
-            public async Task Results_Should_Have_The_Inboud_Direction()
-            {
-                Setup();
-
-                var result = await monitorService.GetMessages(new MessageFilter()
-                {
-                    Direction = new[] { Direction.Inbound }
-                });
-
-                Assert.True(result.Messages.All(message => message.Direction == Direction.Inbound));
-
-                Cleanup();
-            }
-
-            [Fact]
-            public async Task Results_Should_Have_The_Outbound_Direction()
-            {
-                Setup();
-
-                var result = await monitorService.GetMessages(new MessageFilter()
-                {
-                    Direction = new[] { Direction.Outbound }
-                });
-
-                Assert.True(result.Messages.All(message => message.Direction == Direction.Outbound));
-
-                Cleanup();
-            }
-
-            [Fact]
-            public async Task Status_Should_Be_Mapped()
-            {
-                var result = await Setup().monitorService.GetMessages(new MessageFilter());
-                Assert.True(result.Messages.All(msg => !string.IsNullOrEmpty(msg.Status)));
-            }
-
-            public class GetPmodeNumber : MonitorServiceTests
-            {
-                [Fact]
-                public void Returns_Pmode_Number_From_Pmode_String()
-                {
-                    var pmodeContent = File.ReadAllText(@"receivingpmode.xml");
-                    var result = Setup().monitorService.GetPmodeNumber(pmodeContent);
-                    Assert.True(result == "8.1.2-basePmode");
-
-                    Cleanup();
-                }
-            }
-
-            public class GetExceptions : MonitorServiceTests
-            {
-                [Fact]
-                public async Task Throws_Exception_When_Parameters_Is_Null()
-                {
-                    await Setup().ExpectExceptionAsync(() => monitorService.GetExceptions(null), typeof(ArgumentNullException));
+                    case Direction.Inbound:
+                        id = context.InExceptions.Where(x => x.MessageLocation != null).Select(x => x.Id).First();
+                        break;
+                    case Direction.Outbound:
+                        id = context.OutExceptions.Where(x => x.MessageLocation != null).Select(x => x.Id).First();
+                        break;
                 }
 
-                [Fact]
-                public async void Filter_Should_Filter_The_Data()
-                {
-                    Setup();
-
-                    var filter = new ExceptionFilter()
-                    {
-                        EbmsRefToMessageId = InEbmsMessageId1,
-                        Direction = new[] { Direction.Inbound },
-                    };
-                    var result = await monitorService.GetExceptions(filter);
-
-                    Assert.True(result.Messages.Count() == 2, $"Count should be 2 but was {result.Messages.Count()}");
-                    Assert.True(result.Messages.First().EbmsRefToMessageId == InEbmsMessageId1, $"The first embsRefToMessagId should be {InEbmsRefToMessageId1}");
-                }
-
-                [Fact]
-                public async void Filter_Should_Return_Nothing_When_No_Match()
-                {
-                    Setup();
-                    var filter = new ExceptionFilter
-                    {
-                        EbmsRefToMessageId = "IDONTEXIST"
-                    };
-                    var result = await monitorService.GetExceptions(filter);
-
-                    Assert.True(!result.Messages.Any());
-                }
-
-                [Fact]
-                public async Task Return_All_Directions()
-                {
-                    var result = await Setup().monitorService.GetExceptions(new ExceptionFilter());
-
-                    Assert.True(result.Messages.Count() == 6);
-                }
-
-                [Fact]
-                public async Task Throws_Exception_When_No_Direction()
-                {
-                    var result = await Setup().ExpectExceptionAsync(() => monitorService.GetExceptions(new ExceptionFilter() { Direction = null }), typeof(ArgumentNullException));
-                }
-
-                [Fact]
-                public async Task Exception_Short_Should_Not_Contain_The_Full_Exception()
-                {
-                    Setup();
-
-                    var result = await monitorService.GetExceptions(new ExceptionFilter
-                    {
-                        EbmsRefToMessageId = InEbmsRefToMessageId1
-                    });
-
-                    Assert.True(result.Messages.First().ExceptionShort == "Decryption failed");
-                }
-            }
-
-            public class Hash : MonitorServiceTests
-            {
-                [Fact]
-                public async void Message_Should_Contain_Md5_Hash()
-                {
-                    Setup();
-
-                    var inMessageResult = await monitorService.GetMessages(new MessageFilter { Direction = new[] { Direction.Inbound } });
-                    var outMessageResult = await monitorService.GetMessages(new MessageFilter { Direction = new[] { Direction.Outbound } });
-
-                    Assert.True(inMessageResult.Messages.All(msg => !string.IsNullOrEmpty(msg.Hash)));
-                    Assert.True(outMessageResult.Messages.All(msg => !string.IsNullOrEmpty(msg.Hash)));
-                }
-            }
-
-            public class GetRelatedMessages : MonitorServiceTests
-            {
-                private readonly string _outEbmsMessage3 = Guid.NewGuid().ToString();
-                private readonly string ForwardedMessageId = "ForwardedMessage1";
-
-                protected override void SetupDataStore()
-                {
-                    using (datastoreContext = new DatastoreContext(options, StubConfig.Default))
-                    {
-                        datastoreContext.InMessages.Add(new InMessage(ebmsMessageId: InEbmsMessageId1)
-                        {
-                            EbmsRefToMessageId = InEbmsRefToMessageId1,
-                        });
-                        datastoreContext.InMessages.Add(new InMessage(ebmsMessageId: InEbmsRefToMessageId1));
-
-                        datastoreContext.OutMessages.Add(new OutMessage(ebmsMessageId: InEbmsRefToMessageId1));
-
-                        datastoreContext.InMessages.Add(new InMessage(ebmsMessageId: "RANDOM")
-                        {
-                            EbmsRefToMessageId = InEbmsMessageId1,
-                        });
-                        datastoreContext.InMessages.Add(new InMessage(ebmsMessageId: InEbmsMessageId2));
-
-                        datastoreContext.OutMessages.Add(new OutMessage(ebmsMessageId: OutEbmsMessageId1)
-                        {
-                            EbmsRefToMessageId = OutEbmsRefToMessageId1
-                        });
-                        datastoreContext.OutMessages.Add(new OutMessage(ebmsMessageId: OutEbmsMessageId2)
-                        {
-                            EbmsRefToMessageId = OutEbmsMessageId1
-                        });
-                        datastoreContext.InMessages.Add(new InMessage(ebmsMessageId: Guid.NewGuid().ToString())
-                        {
-                            EbmsRefToMessageId = OutEbmsMessageId1
-                        });
-                        datastoreContext.InMessages.Add(new InMessage(ebmsMessageId: OutEbmsRefToMessageId1)
-                        {
-                            EbmsRefToMessageId = Guid.NewGuid().ToString()
-                        });
-
-                        datastoreContext.OutMessages.Add(new OutMessage(ebmsMessageId: _outEbmsMessage3));
-
-                        datastoreContext.OutMessages.Add(new OutMessage(ebmsMessageId: Guid.NewGuid().ToString())
-                        {
-                            EbmsRefToMessageId = _outEbmsMessage3
-                        });
-                        datastoreContext.InMessages.Add(new InMessage(ebmsMessageId: Guid.NewGuid().ToString())
-                        {
-                            EbmsRefToMessageId = _outEbmsMessage3
-                        });
-
-                        datastoreContext.InMessages.Add(new InMessage(ebmsMessageId: Guid.NewGuid().ToString()));
-
-                        datastoreContext.OutMessages.Add(new OutMessage(Guid.NewGuid().ToString()));
-
-                        // Forwareded message
-                        var newinMessage = new InMessage(ForwardedMessageId);
-                        newinMessage.Operation = Operation.Forwarded;
-                        datastoreContext.InMessages.Add(newinMessage);
-                        var newOutMessage = new OutMessage(ForwardedMessageId);
-                        newOutMessage.Operation = Operation.ToBeSent;
-                        datastoreContext.OutMessages.Add(newOutMessage);
-
-                        var pmodeId = pmode.Id;
-                        var pmodeString = AS4XmlSerializer.ToString(pmode);
-
-                        foreach (var inMessage in datastoreContext.InMessages)
-                        {
-                            inMessage.SetPModeInformation(pmodeId, pmodeString);
-                        }
-                        foreach (var outMessage in datastoreContext.OutMessages)
-                        {
-                            outMessage.SetPModeInformation(pmodeId, pmodeString);
-                        }
-
-                        datastoreContext.SaveChanges();
-                    }
-                }
-
-                [Fact]
-                public async void Returns_All_Related_Messages()
-                {
-                    Setup();
-
-                    var result = await monitorService.GetRelatedMessages(Direction.Inbound, InEbmsMessageId1);
-
-                    Assert.True(result.Messages.Count() == 3);
-                }
-
-                [Fact]
-                public async Task OutMessages_Should_Return_All_Related_Messages()
-                {
-                    var result = await Setup().monitorService.GetRelatedMessages(Direction.Outbound, OutEbmsMessageId1);
-
-                    Assert.True(result.Messages.Count() == 3);
-                }
-
-                [Fact]
-                public async Task OutMessages_Without_RefTo_Message_Returns_Related_Messages()
-                {
-                    var result = await Setup().monitorService.GetRelatedMessages(Direction.Outbound, _outEbmsMessage3);
-                    Assert.True(result.Messages.Count() == 2);
-                }
-
-                [Fact]
-                public async Task Throws_Exception_When_Parames_Are_Null()
-                {
-                    await Assert.ThrowsAsync<ArgumentNullException>(() => Setup().monitorService.GetRelatedMessages(Direction.Outbound, null));
-                }
-
-                [Fact]
-                public async Task ForwardedMessage_ShouldBeReturned()
-                {
-                    var result = await Setup().monitorService.GetRelatedMessages(Direction.Inbound, ForwardedMessageId);
-
-                    Assert.True(result.Messages.Count() == 1, "Expected 1 message");
-                }
-            }
-
-            public class DownloadMessageBody : MonitorServiceTests
-            {
-                [Fact]
-                public async Task Throws_Exception_When_Parameters_Are_Invalid()
-                {
-                    Setup();
-                    await ExpectExceptionAsync(() => monitorService.DownloadMessageBody(Direction.Inbound, 0), typeof(ArgumentOutOfRangeException));
-                }
-            }
-
-            public class DownloadExceptionBody : MonitorServiceTests
-            {
-                [Fact]
-                public async Task Throws_Exception_When_Parameters_Are_Invalid()
-                {
-                    Setup();
-                    await ExpectExceptionAsync(() => monitorService.DownloadExceptionMessageBody(Direction.Inbound, 0), typeof(ArgumentOutOfRangeException));
-                }
-
-                [Theory]
-                [InlineData(Direction.Inbound)]
-                [InlineData(Direction.Outbound)]
-                public async Task Gets_The_MesageBody(Direction direction)
-                {
-                    Setup();
-
-                    long id = 0;
-                    switch (direction)
-                    {
-                        case Direction.Inbound:
-                            id = datastoreContext.InExceptions.Where(x => x.MessageLocation != null).Select(x => x.Id).First();
-                            break;
-                        case Direction.Outbound:
-                            id = datastoreContext.OutExceptions.Where(x => x.MessageLocation != null).Select(x => x.Id).First();
-                            break;
-                    }
-
-                    var result = await monitorService.DownloadExceptionMessageBody(direction, id);
-                    Assert.True(result != null, $"Could not find body for {id}");
-                }
+                var result = await _sut.DownloadExceptionMessageBodyAsync(direction, id, TestContext.Current.CancellationToken);
+                Assert.NotNull(result);
             }
         }
     }

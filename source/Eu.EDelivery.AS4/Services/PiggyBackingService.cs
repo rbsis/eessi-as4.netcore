@@ -15,7 +15,7 @@ namespace Eu.EDelivery.AS4.Services;
 /// <summary>
 /// Service that centralizes the functionality related to the Piggy-Back approach of bundling <see cref="SignalMessage"/>s to <see cref="PullRequest"/>s.
 /// </summary>
-internal class PiggyBackingService : IPiggyBackingService
+public class PiggyBackingService : IPiggyBackingService
 {
     private readonly ILogger<PiggyBackingService> _logger;
     private readonly IDatastoreRepository _repository;

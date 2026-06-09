@@ -8,7 +8,7 @@ namespace Eu.EDelivery.AS4.Strategies.Sender;
 /// Class to provide <see cref="IDeliverSender" /> implementations
 /// based on a given condition
 /// </summary>
-internal class DeliverSenderProvider : IDeliverSenderProvider
+public class DeliverSenderProvider : IDeliverSenderProvider
 {
     private readonly ILogger<DeliverSenderProvider> _logger;
     private readonly IServiceProvider _serviceProvider;

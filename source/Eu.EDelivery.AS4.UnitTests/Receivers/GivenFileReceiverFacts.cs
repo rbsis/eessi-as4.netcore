@@ -1,6 +1,5 @@
 ﻿using Eu.EDelivery.AS4.Model.Internal;
 using Eu.EDelivery.AS4.Receivers;
-using Eu.EDelivery.AS4.TestUtils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NSubstitute;

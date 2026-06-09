@@ -3,7 +3,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Eu.EDelivery.AS4.Exceptions.Handlers;
 
-internal class LogExceptionHandler : IAgentExceptionHandler
+public class LogExceptionHandler : IAgentExceptionHandler
 {
     private readonly ILogger<LogExceptionHandler> _logger;
 

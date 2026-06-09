@@ -8,7 +8,7 @@ namespace Eu.EDelivery.AS4.Services;
 /// <summary>
 /// Service abstraction to set the referenced deliver message to the right Status/Operation accordingly to the <see cref="SendResult"/>.
 /// </summary>
-internal class MarkForRetryService : IMarkForRetryService
+public class MarkForRetryService : IMarkForRetryService
 {
     private readonly ILogger<MarkForRetryService> _logger;
 

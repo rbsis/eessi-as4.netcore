@@ -11,10 +11,9 @@ using Eu.EDelivery.AS4.Serialization;
 using Eu.EDelivery.AS4.Steps;
 using Eu.EDelivery.AS4.Steps.Receive;
 using Eu.EDelivery.AS4.Streaming;
-using Eu.EDelivery.AS4.TestUtils;
+using Eu.EDelivery.AS4.TestUtils.Stubs;
 using Eu.EDelivery.AS4.UnitTests.Common;
 using Eu.EDelivery.AS4.UnitTests.Model;
-using Eu.EDelivery.AS4.UnitTests.Repositories;
 using Microsoft.Extensions.Logging.Abstractions;
 using static Eu.EDelivery.AS4.UnitTests.Properties.Resources;
 

@@ -1,15 +1,14 @@
 ﻿using System.ComponentModel;
 
-namespace Eu.EDelivery.AS4.Fe.UnitTests.TestData
-{
-    [Description("TestReceiverWithOnlyDescription")]
-    public class TestReceiverWithOnlyDescription : ITestReceiver
-    {
-        [Description("Name")]
-        [Info("Name")]
-        public string Name { get; set; }
+namespace Eu.EDelivery.AS4.Fe.UnitTests.TestData;
 
-        [Info("Test", attributes: new [] { "testattribute"})]
-        public string Test { get; set; }
-    }
+[Description("TestReceiverWithOnlyDescription")]
+public class TestReceiverWithOnlyDescription : ITestReceiver
+{
+    [Description("Name")]
+    [Info("Name")]
+    public required string Name { get; set; }
+
+    [Info("Test", attributes: ["testattribute"])]
+    public string? Test { get; set; }
 }

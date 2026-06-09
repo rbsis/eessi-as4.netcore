@@ -9,6 +9,7 @@ using System.Runtime.InteropServices;
 [assembly: InternalsVisibleTo("Eu.EDelivery.AS4.ServiceHandler")]
 [assembly: InternalsVisibleTo("Eu.EDelivery.AS4.IntegrationTests")]
 [assembly: InternalsVisibleTo("Eu.EDelivery.AS4.ComponentTests")]
+[assembly: InternalsVisibleTo("Eu.EDelivery.AS4.TestUtils")]
 [assembly: InternalsVisibleTo("DynamicProxyGenAssembly2")]
 
 // Setting ComVisible to false makes the types in this assembly not visible 

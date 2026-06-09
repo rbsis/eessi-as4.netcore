@@ -10,6 +10,7 @@
     </ItemGroup>
     <ItemGroup>
         <ProjectReference Include="..\Eu.EDelivery.AS4.Steps\Eu.EDelivery.AS4.Steps.csproj" />
+        <ProjectReference Include="..\Eu.EDelivery.AS4.Transformers\Eu.EDelivery.AS4.Transformers.csproj" />
         <ProjectReference Include="..\Eu.EDelivery.AS4\Eu.EDelivery.AS4.csproj" />
     </ItemGroup>
 </Project>

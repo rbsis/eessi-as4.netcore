@@ -6,7 +6,7 @@ namespace Eu.EDelivery.AS4.Builders;
 /// <summary>
 /// Factory implementation to create instance from a given <see cref="Type"/>
 /// </summary>
-internal class GenericTypeBuilder : IGenericTypeBuilder
+public class GenericTypeBuilder : IGenericTypeBuilder
 {
     private readonly ILogger<GenericTypeBuilder> _logger;
 

@@ -1,84 +1,85 @@
-using System.Security.Cryptography.X509Certificates;
+﻿using System.Security.Cryptography.X509Certificates;
 using Eu.EDelivery.AS4.Fe.Pmodes.Model;
 using Eu.EDelivery.AS4.Model.PMode;
 using Newtonsoft.Json.Linq;
-using Xunit;
 
-namespace Eu.EDelivery.AS4.Fe.UnitTests
+namespace Eu.EDelivery.AS4.Fe.UnitTests;
+
+public class SendingBasePmodeTests
 {
-    public class SendingBasePmodeTests
+    [Fact]
+    public void Contains_TlsConfiguration_When_Present_As_Json()
     {
-        [Fact]
-        public void Contains_TlsConfiguration_When_Present_As_Json()
+        var certFindCriteria = new ClientCertificateReference
         {
-            var certFindCriteria = new ClientCertificateReference
+            ClientCertificateFindType = X509FindType.FindBySubjectName,
+            ClientCertificateFindValue = "subject"
+        };
+        var pmode = new SendingBasePmode
+        {
+            Pmode = new SendingProcessingMode
             {
-                ClientCertificateFindType = X509FindType.FindBySubjectName,
-                ClientCertificateFindValue = "subject"
-            };
-            var pmode = new SendingBasePmode
-            {
-                Pmode = new SendingProcessingMode
+                PushConfiguration = new PushConfiguration
                 {
-                    PushConfiguration = new PushConfiguration
+                    TlsConfiguration =
                     {
-                        TlsConfiguration =
-                        {
-                            IsEnabled = true,
-                            ClientCertificateInformation = JObject.FromObject(certFindCriteria)
-                        }
+                        IsEnabled = true,
+                        ClientCertificateInformation = JObject.FromObject(certFindCriteria)
                     }
                 }
-            };
+            }
+        };
 
-            Assert.IsType<ClientCertificateReference>(pmode.Pmode.PushConfiguration.TlsConfiguration.ClientCertificateInformation);
-        }
+        Assert.IsType<ClientCertificateReference>(pmode.Pmode.PushConfiguration.TlsConfiguration.ClientCertificateInformation);
+    }
 
-        [Fact]
-        public void IsDynamicDiscoveryEnabled_True_Will_Set_PushConfigurationNode_To_Null()
+    [Fact]
+    public void IsDynamicDiscoveryEnabled_True_Will_Set_PushConfigurationNode_To_Null()
+    {
+        // Arrange
+        var pmode = new SendingBasePmode
         {
-            var pmode = new SendingBasePmode
+            Pmode = new SendingProcessingMode
             {
-                Pmode = new SendingProcessingMode
-                {
-                    PushConfiguration = new PushConfiguration()
-                },
-                IsDynamicDiscoveryEnabled = true
-            };
+                PushConfiguration = new PushConfiguration()
+            },
+        };
 
+        // Act
+        pmode.IsDynamicDiscoveryEnabled = true;
 
-            Assert.Null(pmode.Pmode.PushConfiguration);
-        }
+        // Assert
+        Assert.Null(pmode.Pmode.PushConfiguration);
+    }
 
-        [Fact]
-        public void IsDynamicDiscoveryEnabled_False_When_PushConfiguration_Is_Not_Null()
+    [Fact]
+    public void IsDynamicDiscoveryEnabled_False_When_PushConfiguration_Is_Not_Null()
+    {
+        var pmode = new SendingBasePmode
         {
-            var pmode = new SendingBasePmode
+            Pmode = new SendingProcessingMode()
             {
-                Pmode = new SendingProcessingMode()
-                {
-                    PushConfiguration = new PushConfiguration()
-                }
-            };
+                PushConfiguration = new PushConfiguration()
+            }
+        };
 
-            Assert.False(pmode.IsDynamicDiscoveryEnabled);
-        }
+        Assert.False(pmode.IsDynamicDiscoveryEnabled);
+    }
 
-        [Fact]
-        public void IsDynamicDiscoveryEnabled_Is_True_Then_PushConfiguration_Is_Null()
+    [Fact]
+    public void IsDynamicDiscoveryEnabled_Is_True_Then_PushConfiguration_Is_Null()
+    {
+        var pmode = new SendingBasePmode
         {
-            var pmode = new SendingBasePmode
+            Pmode = new SendingProcessingMode
             {
-                Pmode = new SendingProcessingMode
-                {
-                    PushConfiguration = new PushConfiguration(),
-                    DynamicDiscovery = new DynamicDiscoveryConfiguration()
-                },
-                IsDynamicDiscoveryEnabled = true
-            };
+                PushConfiguration = new PushConfiguration(),
+                DynamicDiscovery = new DynamicDiscoveryConfiguration()
+            },
+            IsDynamicDiscoveryEnabled = true
+        };
 
-            Assert.Null(pmode.Pmode.PushConfiguration);
-            Assert.NotNull(pmode.Pmode.DynamicDiscovery);
-        }
+        Assert.Null(pmode.Pmode.PushConfiguration);
+        Assert.NotNull(pmode.Pmode.DynamicDiscovery);
     }
 }

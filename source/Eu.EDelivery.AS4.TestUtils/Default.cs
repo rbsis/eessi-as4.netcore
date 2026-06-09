@@ -13,9 +13,9 @@ using Eu.EDelivery.AS4.Services.DynamicDiscovery;
 using Eu.EDelivery.AS4.Steps;
 using Eu.EDelivery.AS4.Steps.Receive.Participant;
 using Eu.EDelivery.AS4.Strategies.Sender;
+using Eu.EDelivery.AS4.TestUtils.Repositories;
+using Eu.EDelivery.AS4.TestUtils.Stubs;
 using Eu.EDelivery.AS4.Transformers;
-using Eu.EDelivery.AS4.UnitTests.Common;
-using Eu.EDelivery.AS4.UnitTests.Repositories;
 using Eu.EDelivery.AS4.Validators;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -23,9 +23,9 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 
-namespace Eu.EDelivery.AS4.UnitTests;
+namespace Eu.EDelivery.AS4.TestUtils;
 
-internal static class Default
+public static class Default
 {
     private static readonly Lazy<GenericTypeBuilder> _lazyGenericTypeBuilder = new(() => new(
         NullLogger<GenericTypeBuilder>.Instance));

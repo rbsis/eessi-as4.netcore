@@ -5,7 +5,7 @@ using Eu.EDelivery.AS4.Model.Common;
 using Eu.EDelivery.AS4.Model.PMode;
 using Eu.EDelivery.AS4.Model.Submit;
 using Eu.EDelivery.AS4.Serialization;
-using Eu.EDelivery.AS4.UnitTests.Common;
+using Eu.EDelivery.AS4.TestUtils.Stubs;
 using AgreementReference = Eu.EDelivery.AS4.Model.Core.AgreementReference;
 using CollaborationInfo = Eu.EDelivery.AS4.Model.PMode.CollaborationInfo;
 using Party = Eu.EDelivery.AS4.Model.PMode.Party;

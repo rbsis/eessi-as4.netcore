@@ -1,7 +1,7 @@
 ﻿using Eu.EDelivery.AS4.Factories;
 using Eu.EDelivery.AS4.Mappings.PMode;
 using Eu.EDelivery.AS4.Model.PMode;
-using Eu.EDelivery.AS4.UnitTests.Common;
+using Eu.EDelivery.AS4.TestUtils.Stubs;
 
 namespace Eu.EDelivery.AS4.UnitTests.Mappings.PMode;
 

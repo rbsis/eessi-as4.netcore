@@ -14,5 +14,6 @@ public interface IMessageHandler : IHandler
     /// <param name="message">The message.</param>
     /// <param name="toLocation">To location.</param>
     /// <returns></returns>
-    Task Handle(SubmitMessage message, string toLocation);
+    /// <param name="cancellationToken"></param>
+    Task HandleAsync(SubmitMessage message, string toLocation, CancellationToken cancellationToken);
 }

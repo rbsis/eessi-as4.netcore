@@ -187,6 +187,26 @@ public class TestConfig : IConfig
         throw new NotImplementedException();
     }
 
+    public IEnumerable<SendingProcessingMode> GetSendingPModes()
+    {
+        throw new NotImplementedException();
+    }
+
+    public ReceivingProcessingMode? GetReceivingPMode(string id)
+    {
+        throw new NotImplementedException();
+    }
+
+    public string GetFileLocationForReceivingPMode(string id)
+    {
+        throw new NotImplementedException();
+    }
+
+    public string GetFileLocationForSendingPMode(string id)
+    {
+        throw new NotImplementedException();
+    }
+
     /// <summary>
     /// Gets the retry polling interval for which the Retry Agent will poll 
     /// for 'to-be-retried' messages/exceptions for a delivery or notification operation.

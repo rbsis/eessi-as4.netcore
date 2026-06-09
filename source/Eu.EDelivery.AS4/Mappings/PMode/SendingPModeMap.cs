@@ -9,7 +9,7 @@ namespace Eu.EDelivery.AS4.Mappings.PMode;
 /// <summary>
 /// Collection of mapping functions from ebMS models to models in the <see cref="PMode"/> namespace.
 /// </summary>
-internal class SendingPModeMap : ISendingPModeMap
+public class SendingPModeMap : ISendingPModeMap
 {
     private readonly IIdentifierFactory _identifierFactory;
 

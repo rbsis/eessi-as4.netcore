@@ -4,7 +4,7 @@ namespace Eu.EDelivery.AS4.Fe.Monitor.Model;
 
 public class MessageFilter : BaseFilter<MessageEntity, Message>
 {
-    public Direction[] Direction { get; set; } = { Model.Direction.Inbound, Model.Direction.Outbound };
+    public Direction[] Direction { get; set; } = [Model.Direction.Inbound, Model.Direction.Outbound];
     public string? EbmsMessageId { get; set; }
     public string? EbmsRefToMessageId { get; set; }
     public string[]? ContentType { get; set; }
@@ -245,6 +245,17 @@ public class MessageFilter : BaseFilter<MessageEntity, Message>
     }
 
     public IQueryable<Message> ApplyStatusFilter(IQueryable<Message> query)
+    {
+        if (Status == null || !Status.Any())
+        {
+            return query;
+        }
+
+        List<string> statusFilter = [.. Status.Select(status => status.ToString())];
+        return query.Where(qr => qr.Status != null && statusFilter.Contains(qr.Status));
+    }
+
+    public IEnumerable<Message> ApplyStatusFilter(IEnumerable<Message> query)
     {
         if (Status == null || !Status.Any())
         {

@@ -46,7 +46,9 @@ public class SmpConfigurationService : ISmpConfigurationService
     public async Task<IEnumerable<SmpConfigurationRecord>> GetRecordsAsync(CancellationToken cancellationToken)
     {
         using var datastoreContext = await _contextFactory.CreateDbContextAsync(cancellationToken);
-        var configurations = await datastoreContext.SmpConfigurations.ToListAsync(cancellationToken);
+        var configurations = await datastoreContext.SmpConfigurations
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
 
         return configurations.Select(smp => new SmpConfigurationRecord
         {
@@ -89,8 +91,6 @@ public class SmpConfigurationService : ISmpConfigurationService
     /// <returns></returns>
     public async Task<SmpConfigurationDetail> CreateAsync(SmpConfigurationDetail detail, CancellationToken cancellationToken)
     {
-        EnsureArg.IsNotNull(detail, nameof(detail));
-
         ValidateSmpConfiguration(detail);
 
         var configuration = _entitiesMapper.Map(detail);
@@ -113,7 +113,6 @@ public class SmpConfigurationService : ISmpConfigurationService
     /// <exception cref="NotFoundException"></exception>
     public async Task UpdateAsync(long id, SmpConfigurationDetail detail, CancellationToken cancellationToken)
     {
-        EnsureArg.IsNotNull(detail, nameof(detail));
         EnsureArg.IsTrue(id > 0, nameof(id));
         ValidateSmpConfiguration(detail);
 
@@ -183,10 +182,10 @@ public class SmpConfigurationService : ISmpConfigurationService
     private static void ValidateSmpConfiguration(SmpConfigurationDetail smpConfiguration)
     {
         EnsureArg.IsTrue(smpConfiguration.EncryptAlgorithmKeySize >= 0, nameof(smpConfiguration.EncryptAlgorithmKeySize));
-        EnsureArg.IsNotNullOrWhiteSpace(smpConfiguration.PartyRole, nameof(smpConfiguration.PartyRole));
-        EnsureArg.IsNotNullOrWhiteSpace(smpConfiguration.PartyType, nameof(smpConfiguration.PartyType));
-        EnsureArg.IsNotNullOrWhiteSpace(smpConfiguration.ToPartyId, nameof(smpConfiguration.ToPartyId));
-        EnsureArg.IsNotNullOrWhiteSpace(smpConfiguration.Url, nameof(smpConfiguration.Url));
+        ArgumentException.ThrowIfNullOrWhiteSpace(smpConfiguration.PartyRole, nameof(smpConfiguration.PartyRole));
+        ArgumentException.ThrowIfNullOrWhiteSpace(smpConfiguration.PartyType, nameof(smpConfiguration.PartyType));
+        ArgumentException.ThrowIfNullOrWhiteSpace(smpConfiguration.ToPartyId, nameof(smpConfiguration.ToPartyId));
+        ArgumentException.ThrowIfNullOrWhiteSpace(smpConfiguration.Url, nameof(smpConfiguration.Url));
 
         if (!string.IsNullOrEmpty(smpConfiguration.EncryptPublicKeyCertificate)
             && string.IsNullOrEmpty(smpConfiguration.EncryptPublicKeyCertificateName))

@@ -1,6 +1,5 @@
 ﻿using System.Xml;
 using System.Xml.Schema;
-using Eu.EDelivery.AS4.UnitTests.Utilities;
 
 namespace Eu.EDelivery.AS4.UnitTests.Xml;
 
@@ -165,6 +164,6 @@ public class XsdValidationFixture
     {
         Computer.RunPowershellScript("&..\\scripts\\GenerateXsd.ps1 -binDirectory . -outputDirectory ./doc/schemas");
         // Pragmatic way to make sure that the XSD's are ready
-        System.Threading.Thread.Sleep(5000);
+        Thread.Sleep(5000);
     }
 }

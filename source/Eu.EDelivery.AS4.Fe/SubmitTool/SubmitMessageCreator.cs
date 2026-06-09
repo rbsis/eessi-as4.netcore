@@ -88,7 +88,7 @@ public class SubmitMessageCreator : ISubmitMessageCreator
         {
             await _client.SendInfoAsync($"Submitting message {i + 1} of {submitInfo.NumberOfSubmitMessages} to {messageDestination}", cancellationToken);
             var submitMessage = BuildMessage(submitInfo, sendingPmode, payloads);
-            await SubmitMessage(submitMessage, messageDestination);
+            await SubmitMessageAsync(submitMessage, messageDestination, cancellationToken);
         }
     }
 
@@ -141,13 +141,14 @@ public class SubmitMessageCreator : ISubmitMessageCreator
         return result;
     }
 
-    private async Task SubmitMessage(SubmitMessage message, string toLocation)
+    private async Task SubmitMessageAsync(SubmitMessage message, string toLocation, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(message.MessageInfo.MessageId, nameof(message.MessageInfo.MessageId));
 
-        await _client.SendAs4MessageAsync(AS4XmlSerializer.ToString(message), message.MessageInfo.MessageId, CancellationToken.None);
+        await _client.SendAs4MessageAsync(AS4XmlSerializer.ToString(message), message.MessageInfo.MessageId, cancellationToken);
         var handler = _messageHandlers.First(x => x.CanHandle(toLocation))
             ?? throw new Exception($"No message handler found for {toLocation}");
-        await handler.Handle(message, toLocation);
+
+        await handler.HandleAsync(message, toLocation, cancellationToken);
     }
 }

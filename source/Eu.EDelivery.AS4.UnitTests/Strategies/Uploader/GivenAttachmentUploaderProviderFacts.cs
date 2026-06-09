@@ -1,5 +1,5 @@
 ﻿using Eu.EDelivery.AS4.Strategies.Uploader;
-using Eu.EDelivery.AS4.UnitTests.Common;
+using Eu.EDelivery.AS4.TestUtils.Stubs;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 

@@ -6,7 +6,7 @@ namespace Eu.EDelivery.AS4.Steps.Receive.Participant;
 /// <summary>
 /// Class to Provide <see cref="IPModeRule" /> implementations
 /// </summary>
-internal class PModeRuleEngine : IPModeRuleEngine
+public class PModeRuleEngine : IPModeRuleEngine
 {
     private readonly ILogger<PModeRuleEngine> _logger;
 

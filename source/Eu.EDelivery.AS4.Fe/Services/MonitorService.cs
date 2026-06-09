@@ -69,20 +69,24 @@ public class MonitorService : IMonitorService
     public async Task<MessageResult<ExceptionMessage>> GetExceptionsAsync(ExceptionFilter? filter, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(filter, nameof(filter));
-        ArgumentNullException.ThrowIfNull(filter.Direction, nameof(filter.Direction));
+        Ensure.That(filter.Direction, nameof(filter.Direction)).HasItems();
 
         using var datastoreContext = await _contextFactory.CreateDbContextAsync(cancellationToken);
-        var inExceptions = filter.Direction.Contains(Direction.Inbound) ? filter.ApplyFilter(datastoreContext.InExceptions).Select(exception => _inExceptionMapper.Map(exception)) : null;
-        var outExceptions = filter.Direction.Contains(Direction.Outbound) ? filter.ApplyFilter(datastoreContext.OutExceptions).Select(exception => _outExceptionMapper.Map(exception)) : null;
+        var inExceptions = filter.Direction.Contains(Direction.Inbound)
+            ? filter.ApplyFilter(datastoreContext.InExceptions).ToList().Select(exception => _inExceptionMapper.Map(exception))
+            : null;
+        var outExceptions = filter.Direction.Contains(Direction.Outbound)
+            ? filter.ApplyFilter(datastoreContext.OutExceptions).ToList().Select(exception => _outExceptionMapper.Map(exception))
+            : null;
 
-        IQueryable<ExceptionMessage>? result = null;
+        IEnumerable<ExceptionMessage>? result = null;
         if (inExceptions != null && outExceptions != null) result = inExceptions.Concat(outExceptions);
         else if (inExceptions != null) result = inExceptions;
         else if (outExceptions != null) result = outExceptions;
 
         if (result == null) throw new BusinessException("Could not get any exceptions, something went wrong.");
 
-        return await filter.ToResult(result.OrderByDescending(msg => msg.InsertionTime));
+        return filter.ToResult(result.OrderByDescending(msg => msg.InsertionTime));
     }
 
     /// <summary>
@@ -100,22 +104,24 @@ public class MonitorService : IMonitorService
     public async Task<MessageResult<Message>> GetMessagesAsync(MessageFilter? filter, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(filter, nameof(filter));
-        ArgumentNullException.ThrowIfNull(filter.Direction, nameof(filter.Direction));
+        Ensure.That(filter.Direction, nameof(filter.Direction)).HasItems();
 
         using var datastoreContext = await _contextFactory.CreateDbContextAsync(cancellationToken);
-        IQueryable<InMessage> inMessageQuery = datastoreContext.InMessages;
-        IQueryable<OutMessage> outMessageQuery = datastoreContext.OutMessages;
 
-        var inMessages = filter.Direction.Contains(Direction.Inbound) ? filter.ApplyFilter(inMessageQuery).Select(message => _inMessageMapper.Map(message)) : null;
-        var outMessages = filter.Direction.Contains(Direction.Outbound) ? filter.ApplyFilter(outMessageQuery).Select(message => _outMessageMapper.Map(message)) : null;
+        var inMessages = filter.Direction.Contains(Direction.Inbound)
+            ? filter.ApplyFilter(datastoreContext.InMessages).ToList().Select(message => _inMessageMapper.Map(message))
+            : null;
+        var outMessages = filter.Direction.Contains(Direction.Outbound)
+            ? filter.ApplyFilter(datastoreContext.OutMessages).ToList().Select(message => _outMessageMapper.Map(message))
+            : null;
 
-        IQueryable<Message>? result = null;
+        IEnumerable<Message>? result = null;
         if (inMessages != null && outMessages != null) result = inMessages.Concat(outMessages);
         else if (inMessages != null) result = inMessages;
         else if (outMessages != null) result = outMessages;
         if (result == null) throw new BusinessException("No messages found");
 
-        var returnValue = await filter.ToResult(filter.ApplyStatusFilter(result).OrderByDescending(msg => msg.InsertionTime));
+        var returnValue = filter.ToResult(filter.ApplyStatusFilter(result).OrderByDescending(msg => msg.InsertionTime));
         UpdateHasExceptions(returnValue, await GetExceptionIdsAsync(returnValue, cancellationToken));
 
         return returnValue;
@@ -130,57 +136,75 @@ public class MonitorService : IMonitorService
     /// <returns></returns>
     public async Task<MessageResult<Message>> GetRelatedMessagesAsync(Direction direction, string messageId, CancellationToken cancellationToken)
     {
-        EnsureArg.IsNotNullOrEmpty(messageId);
+        ArgumentException.ThrowIfNullOrEmpty(messageId);
 
         using var datastoreContext = await _contextFactory.CreateDbContextAsync(cancellationToken);
         var refToMessageId = direction == Direction.Inbound
             ? datastoreContext.InMessages.Where(message => message.EbmsMessageId == messageId).Select(message => message.EbmsRefToMessageId).FirstOrDefault()
             : datastoreContext.OutMessages.Where(message => message.EbmsMessageId == messageId).Select(message => message.EbmsRefToMessageId).FirstOrDefault();
 
-        var resultTest = new List<IQueryable<Message>>();
+        var resultTest = new List<Message>();
 
         if (!string.IsNullOrEmpty(refToMessageId))
         {
-            resultTest.Add(datastoreContext.InMessages
+            var inMessages = await datastoreContext.InMessages
                 .Where(message => message.EbmsMessageId == refToMessageId)
-                .Select(message => _inMessageMapper.Map(message)));
+                .Select(message => _inMessageMapper.Map(message))
+                .ToListAsync(cancellationToken);
 
-            resultTest.Add(datastoreContext.OutMessages
+            resultTest.AddRange(inMessages);
+
+            var outMessages = await datastoreContext.OutMessages
                 .Where(message => message.EbmsMessageId == refToMessageId)
-                .Select(message => _outMessageMapper.Map(message)));
+                .Select(message => _outMessageMapper.Map(message))
+                .ToListAsync(cancellationToken);
+
+            resultTest.AddRange(outMessages);
         }
 
         if (!string.IsNullOrEmpty(messageId))
         {
-            resultTest.Add(datastoreContext.InMessages
+            var inMessages = await datastoreContext.InMessages
                 .Where(message => message.EbmsRefToMessageId == messageId)
-                .Select(message => _inMessageMapper.Map(message)));
+                .Select(message => _inMessageMapper.Map(message))
+                .ToListAsync(cancellationToken);
 
-            resultTest.Add(datastoreContext.OutMessages
+            resultTest.AddRange(inMessages);
+
+            var outMessages = await datastoreContext.OutMessages
                 .Where(message => message.EbmsRefToMessageId == messageId)
-                .Select(message => _outMessageMapper.Map(message)));
+                .Select(message => _outMessageMapper.Map(message))
+                .ToListAsync(cancellationToken);
+
+            resultTest.AddRange(outMessages);
 
             if (direction == Direction.Inbound)
             {
-                resultTest.Add(datastoreContext.OutMessages
+                outMessages = await datastoreContext.OutMessages
                     .Where(message => message.EbmsMessageId == messageId)
-                    .Select(message => _outMessageMapper.Map(message)));
+                    .Select(message => _outMessageMapper.Map(message))
+                    .ToListAsync(cancellationToken);
+
+                resultTest.AddRange(outMessages);
             }
             else
             {
-                resultTest.Add(datastoreContext.InMessages
-                    .Where(message => message.EbmsMessageId == messageId)
-                    .Select(message => _inMessageMapper.Map(message)));
+                inMessages = await datastoreContext.InMessages
+                     .Where(message => message.EbmsMessageId == messageId)
+                     .Select(message => _inMessageMapper.Map(message))
+                     .ToListAsync(cancellationToken);
+
+                resultTest.AddRange(inMessages);
             }
         }
 
-        var result = resultTest.First();
-        result = resultTest.Skip(1).Aggregate(result, (current, query) => current.Union(query));
+        //var result = resultTest.First();
+        //result = resultTest.Skip(1).Aggregate(result, (current, query) => current.Union(query))
 
         return new MessageResult<Message>
         {
-            Messages = await result.ToListAsync(cancellationToken),
-            Total = await result.CountAsync(cancellationToken),
+            Messages = resultTest,
+            Total = resultTest.Count,
             Page = 0,
             Pages = 0,
             CurrentPage = 0

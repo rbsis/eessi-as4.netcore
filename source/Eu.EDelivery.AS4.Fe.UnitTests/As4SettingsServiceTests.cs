@@ -1,257 +1,291 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using AutoMapper;
+﻿using Eu.EDelivery.AS4.Fe.Exceptions;
+using Eu.EDelivery.AS4.Fe.Services;
 using Eu.EDelivery.AS4.Fe.Settings;
 using Eu.EDelivery.AS4.Model.Internal;
 using NSubstitute;
-using Xunit;
 
-namespace Eu.EDelivery.AS4.Fe.UnitTests
+namespace Eu.EDelivery.AS4.Fe.UnitTests;
+
+public class As4SettingsServiceTests
 {
-    public class As4SettingsServiceTests
+    private const string SubmitAgentName = "submitAgentName";
+    private const string SubmitAgentName2 = "submitAgentName2";
+    private const string ReceiveAgentName = "receiveAgentName";
+    private readonly Model.Internal.Settings _settingsList;
+
+    private readonly AgentSettings _submitAgent = new()
     {
-        private const string SubmitAgentName = "submitAgentName";
-        private const string SubmitAgentName2 = "submitAgentName2";
-        private const string ReceiveAgentName = "receiveAgentName";
-        private readonly Model.Internal.Settings settingsList;
+        Name = SubmitAgentName
+    };
 
-        private readonly AgentSettings submitAgent = new AgentSettings
+    private As4SettingsService _settingsService;
+    private ISettingsSource _settingsSource;
+
+    protected As4SettingsServiceTests()
+    {
+        _settingsList = new Model.Internal.Settings
         {
-            Name = SubmitAgentName
+            Agents = new SettingsAgents
+            {
+                SubmitAgents =
+                [
+                    _submitAgent,
+                    new AgentSettings
+                    {
+                        Name = SubmitAgentName2
+                    }
+                ],
+                ReceiveAgents =
+                [
+                    new AgentSettings
+                    {
+                        Name = ReceiveAgentName
+                    }
+                ]
+            }
         };
+        _settingsSource = Substitute.For<ISettingsSource>();
+        _settingsService = new As4SettingsService(_settingsSource);
+    }
 
-        private As4SettingsService settingsService;
-        private ISettingsSource settingsSource;
+    private void Setup(CancellationToken cancellationToken)
+    {
+        _settingsSource = Substitute.For<ISettingsSource>();
+        _settingsSource.GetAsync(cancellationToken).Returns(_settingsList);
+        _settingsService = new As4SettingsService(_settingsSource);
+    }
 
-        public As4SettingsServiceTests()
+    public class CreateAgent : As4SettingsServiceTests
+    {
+        [Fact]
+        public async Task Add_Agent_When_Original_List_Is_Empty()
         {
-            settingsList = new Model.Internal.Settings
+            // Arrange
+            var newAgent = new AgentSettings
             {
-                Agents = new SettingsAgents
-                {
-                    SubmitAgents = new List<AgentSettings>
-                    {
-                        submitAgent,
-                        new AgentSettings
-                        {
-                            Name = SubmitAgentName2
-                        }
-                    }.ToArray(),
-                    ReceiveAgents = new List<AgentSettings>
-                    {
-                        new AgentSettings
-                        {
-                            Name = ReceiveAgentName
-                        }
-                    }.ToArray()
-                }
+                Name = "newAgent"
             };
+
+            Setup(TestContext.Current.CancellationToken);
+
+            _settingsSource.GetAsync(TestContext.Current.CancellationToken).Returns(new Model.Internal.Settings
+            {
+                Agents = new SettingsAgents()
+            });
+
+            // Act
+            await _settingsService.CreateAgentAsync(newAgent, agents => agents?.ReceiveAgents ?? [], (settings, agt) => settings.ReceiveAgents = agt, TestContext.Current.CancellationToken);
+
+            // Assert
+            await _settingsSource.Received().SaveAsync(
+                Arg.Is<Model.Internal.Settings>(settings => settings.Agents!.ReceiveAgents!.Any(agent => agent.Name == newAgent.Name)),
+                Arg.Any<CancellationToken>());
         }
 
-        private As4SettingsServiceTests Setup()
+        [Fact]
+        public async Task Creates_Agent_When_It_Doesnt_Exist_Yet()
         {
-            Mapper.Initialize(cfg => cfg.AddProfile(new SettingsAutoMapper()));
-            settingsSource = Substitute.For<ISettingsSource>();
-            settingsSource.Get().Returns(settingsList);
-            settingsService = new As4SettingsService(new Mapper(Mapper.Configuration), settingsSource);
-            return this;
+            // Arrange
+            var newAgentName = "newAgent";
+            var newAgent = new AgentSettings
+            {
+                Name = newAgentName
+            };
+
+            Setup(TestContext.Current.CancellationToken);
+
+            // Act & Assert
+            await _settingsService.CreateAgentAsync(
+                newAgent,
+                agents => agents?.SubmitAgents ?? [],
+                (settings, agents) => settings.SubmitAgents = agents,
+                TestContext.Current.CancellationToken);
+            await _settingsSource.Received().SaveAsync(
+                Arg.Is<Model.Internal.Settings>(settings => settings.Agents!.SubmitAgents!.Any(agent => agent.Name == newAgentName)),
+                Arg.Any<CancellationToken>());
+
+            await _settingsService.CreateAgentAsync(
+                newAgent,
+                agents => agents?.ReceiveAgents ?? [],
+                (settings, agents) => settings.ReceiveAgents = agents,
+                TestContext.Current.CancellationToken);
+            await _settingsSource.Received().SaveAsync(
+                Arg.Is<Model.Internal.Settings>(settings => settings.Agents!.ReceiveAgents!.Any(agent => agent.Name == newAgentName)),
+                Arg.Any<CancellationToken>());
         }
 
-        public class CreateAgent : As4SettingsServiceTests
+        [Fact]
+        public async Task Throws_Exception_When_Agent_With_Name_Already_Exists()
         {
-            [Fact]
-            public async Task Add_Agent_When_Original_List_Is_Empty()
-            {
-                // Setup
-                var newAgent = new AgentSettings
-                {
-                    Name = "newAgent"
-                };
+            // Arrange
+            var newAgent = new AgentSettings { Name = SubmitAgentName };
 
-                var test = Setup();
-                test.settingsSource.Get().Returns(new Model.Internal.Settings
-                {
-                    Agents = new SettingsAgents()
-                });
+            Setup(TestContext.Current.CancellationToken);
 
-                // Act
-                await test.settingsService.CreateAgent(newAgent, agents => agents.ReceiveAgents, (settings, agt) => settings.ReceiveAgents = agt);
+            // Act & Assert
+            await Assert.ThrowsAsync<AlreadyExistsException>(() => _settingsService.CreateAgentAsync(
+                newAgent,
+                agents => agents?.SubmitAgents ?? [],
+                (settings, agents) => settings.SubmitAgents = agents,
+                TestContext.Current.CancellationToken));
+        }
+    }
 
-                // Assert
-                await test.settingsSource.Received().Save(Arg.Is<Model.Internal.Settings>(settings => settings.Agents.ReceiveAgents.Any(agent => agent.Name == newAgent.Name)));
-            }
+    public class UpdateAgent : As4SettingsServiceTests
+    {
+        [Fact]
+        public async Task Throws_Exception_When_Agent_Not_Found()
+        {
+            // Arrange
+            Setup(TestContext.Current.CancellationToken);
 
-            [Fact]
-            public async Task Creates_Agent_When_It_Doesnt_Exist_Yet()
-            {
-                // Setup
-                var newAgentName = "newAgent";
-                var newAgent = new AgentSettings
-                {
-                    Name = newAgentName
-                };
+            var newAgent = new AgentSettings { Name = "NEW RANDOM NAME" };
 
-                var service = Setup().settingsService;
-
-                // Act & Assert
-                await service.CreateAgent(newAgent, agents => agents.SubmitAgents, (settings, agents) => settings.SubmitAgents = agents);
-                await settingsSource.Received().Save(Arg.Is<Model.Internal.Settings>(settings => settings.Agents.SubmitAgents.Any(agent => agent.Name == newAgentName)));
-
-                await service.CreateAgent(newAgent, agents => agents.ReceiveAgents, (settings, agents) => settings.ReceiveAgents = agents);
-                await settingsSource.Received().Save(Arg.Is<Model.Internal.Settings>(settings => settings.Agents.ReceiveAgents.Any(agent => agent.Name == newAgentName)));
-            }
-
-            [Fact]
-            public async Task Throws_Exception_When_Agent_With_Name_Already_Exists()
-            {
-                // Setup
-                var newAgent = new AgentSettings { Name = SubmitAgentName };
-
-                var service = Setup().settingsService;
-
-                // Act & Assert
-                await Assert.ThrowsAsync<AlreadyExistsException>(() => service.CreateAgent(newAgent, agents => agents.SubmitAgents, (settings, agents) => settings.SubmitAgents = agents));
-            }
-
-            [Fact]
-            public async Task Throws_Exception_When_Arguments_Are_Null()
-            {
-                // Act & Assert
-                await Assert.ThrowsAsync<ArgumentNullException>(() => Setup().settingsService.CreateAgent(null, null, null));
-                await Assert.ThrowsAsync<ArgumentNullException>(() => Setup().settingsService.CreateAgent(new AgentSettings(), null, null));
-                await Assert.ThrowsAsync<ArgumentNullException>(() => Setup().settingsService.CreateAgent(new AgentSettings(), agents => agents.SubmitAgents, null));
-            }
+            // Act & Assert
+            await Assert.ThrowsAsync<NotFoundException>(() => _settingsService.UpdateAgentAsync(
+                newAgent, "fdsqfd",
+                settings => settings!.SubmitAgents!,
+                (settings, agents) => settings.SubmitAgents = agents,
+                TestContext.Current.CancellationToken));
         }
 
-        public class UpdateAgent : As4SettingsServiceTests
+        [Fact]
+        public async Task Throws_Exception_When_Agent_With_Name_Already_Exists()
         {
-            [Fact]
-            public async Task Throws_Exception_When_Agent_Not_Found()
-            {
-                Setup();
-                var newAgent = Mapper.Map<AgentSettings, AgentSettings>(submitAgent);
-                newAgent.Name = "NEW RANDOM NAME";
-                // Act & Assert
-                await Assert.ThrowsAsync<NotFoundException>(() => Setup().settingsService.UpdateAgent(newAgent, "fdsqfd", settings => settings.SubmitAgents, (settings, agents) => settings.SubmitAgents = agents));
-            }
+            // Arrange
+            Setup(TestContext.Current.CancellationToken);
 
-            [Fact]
-            public async Task Throws_Exception_When_Agent_With_Name_Already_Exists()
-            {
-                // Act
-                await Assert.ThrowsAsync<AlreadyExistsException>(() => Setup().settingsService.UpdateAgent(new AgentSettings
-                {
-                    Name = SubmitAgentName
-                }, SubmitAgentName2, settings => settings.SubmitAgents, (settings, agents) => settings.SubmitAgents = agents));
-            }
-
-            [Fact]
-            public async Task Throws_Exception_When_parameters_Are_Null()
-            {
-                // Act & Assert
-                await Assert.ThrowsAsync<ArgumentNullException>(() => Setup().settingsService.UpdateAgent(null, null, null, null));
-                await Assert.ThrowsAsync<ArgumentNullException>(() => Setup().settingsService.UpdateAgent(new AgentSettings(), null, null, null));
-                await Assert.ThrowsAsync<ArgumentNullException>(() => Setup().settingsService.UpdateAgent(new AgentSettings(), "test", null, null));
-                await Assert.ThrowsAsync<ArgumentNullException>(() => Setup().settingsService.UpdateAgent(new AgentSettings(), "test", agents => agents.ReceiveAgents, null));
-            }
-
-            [Fact]
-            public async Task Updates()
-            {
-                // Act
-                await Setup().settingsService.UpdateAgent(new AgentSettings
-                {
-                    Name = "NEW"
-                }, submitAgent.Name, settings => settings.SubmitAgents, (settings, agents) => settings.SubmitAgents = agents);
-
-                // Assert
-                Assert.Contains(settingsList.Agents.SubmitAgents, agent => agent.Name == "NEW");
-                await settingsSource.Received().Save(Arg.Is<Model.Internal.Settings>(x => x.Agents.SubmitAgents.Any(agt => agt.Name == "NEW")));
-            }
+            // Act
+            await Assert.ThrowsAsync<AlreadyExistsException>(() => _settingsService.UpdateAgentAsync(
+                new AgentSettings { Name = SubmitAgentName },
+                SubmitAgentName2,
+                settings => settings!.SubmitAgents!,
+                (settings, agents) => settings.SubmitAgents = agents,
+                TestContext.Current.CancellationToken));
         }
 
-        public class DeleteAgent : As4SettingsServiceTests
+        [Fact]
+        public async Task Updates()
         {
-            [Fact]
-            public async Task Deletes_Agent()
-            {
-                // Act & Assert
-                await Setup().settingsService.DeleteAgent(SubmitAgentName, agents => agents.SubmitAgents, (settings, agents) => settings.SubmitAgents = agents);
-                await settingsSource.Received().Save(Arg.Is<Model.Internal.Settings>(x => x.Agents.SubmitAgents.All(agt => agt.Name != SubmitAgentName)));
-                await Setup().settingsService.DeleteAgent(ReceiveAgentName, agents => agents.ReceiveAgents, (settings, agents) => settings.ReceiveAgents = agents);
-                await settingsSource.Received().Save(Arg.Is<Model.Internal.Settings>(x => x.Agents.ReceiveAgents.All(agt => agt.Name != SubmitAgentName)));
+            // Arrange
+            Setup(TestContext.Current.CancellationToken);
 
-                await settingsSource.Received().Get();
-            }
+            // Act
+            await _settingsService.UpdateAgentAsync(
+                new AgentSettings { Name = "NEW" },
+                _submitAgent.Name,
+                settings => settings!.SubmitAgents!,
+                (settings, agents) => settings.SubmitAgents = agents,
+                TestContext.Current.CancellationToken);
 
-            [Fact]
-            public async Task Throws_Exception_when_Agent_Not_Exists()
-            {
-                // Setup
-                Setup();
+            // Assert
+            Assert.Contains(_settingsList.Agents!.SubmitAgents!, agent => agent.Name == "NEW");
+            await _settingsSource.Received().SaveAsync(
+                Arg.Is<Model.Internal.Settings>(x => x.Agents!.SubmitAgents!.Any(agt => agt.Name == "NEW")),
+                Arg.Any<CancellationToken>());
+        }
+    }
 
-                // Act & Assert
-                await Assert.ThrowsAsync<NotFoundException>(() => settingsService.DeleteAgent("IDONTEXISTAGENT", agents => agents.SubmitAgents, (settings, agents) => settings.SubmitAgents = agents));
-                await Assert.ThrowsAsync<NotFoundException>(() => settingsService.DeleteAgent("IDONTEXISTAGENT", agents => agents.ReceiveAgents, (settings, agents) => settings.ReceiveAgents = agents));
-                await settingsSource.DidNotReceive().Save(Arg.Any<Model.Internal.Settings>());
-            }
+    public class DeleteAgent : As4SettingsServiceTests
+    {
+        [Fact]
+        public async Task Deletes_Agent()
+        {
+            // Arrange
+            Setup(TestContext.Current.CancellationToken);
 
-            [Fact]
-            public async Task Throws_Exception_When_Parameters_Are_Null()
-            {
-                // Act & Assert
-                await Assert.ThrowsAsync<ArgumentNullException>(() => Setup().settingsService.DeleteAgent(null, null, null));
-                await Assert.ThrowsAsync<ArgumentNullException>(() => Setup().settingsService.DeleteAgent("TEST", null, null));
-                await Assert.ThrowsAsync<ArgumentNullException>(() => Setup().settingsService.DeleteAgent("TEST", agents => agents.SubmitAgents, null));
-            }
+            // Act & Assert
+            await _settingsService.DeleteAgentAsync(
+                SubmitAgentName,
+                agents => agents!.SubmitAgents!,
+                (settings, agents) => settings.SubmitAgents = agents,
+                TestContext.Current.CancellationToken);
+            await _settingsSource.Received().SaveAsync(
+                Arg.Is<Model.Internal.Settings>(x => x.Agents!.SubmitAgents!.All(agt => agt.Name != SubmitAgentName)),
+                Arg.Any<CancellationToken>());
+            await _settingsService.DeleteAgentAsync(
+                ReceiveAgentName,
+                agents => agents!.ReceiveAgents!,
+                (settings, agents) => settings.ReceiveAgents = agents,
+                TestContext.Current.CancellationToken);
+            await _settingsSource.Received().SaveAsync(
+                Arg.Is<Model.Internal.Settings>(x => x.Agents!.ReceiveAgents!.All(agt => agt.Name != ReceiveAgentName)),
+                Arg.Any<CancellationToken>());
+
+            await _settingsSource.Received().GetAsync(Arg.Any<CancellationToken>());
         }
 
-        public class SavePullSend : As4SettingsServiceTests
+        [Fact]
+        public async Task Throws_Exception_when_Agent_Not_Exists()
         {
-            [Fact]
-            public async Task Saves_Pull_Send_Settings()
-            {
-                // Setup
-                var test = Setup();
-                test.settingsSource.Get().Returns(new Model.Internal.Settings { PullSend = null });
+            // Arrange
+            Setup(TestContext.Current.CancellationToken);
 
-                var fixture = new SettingsPullSend { AuthorizationMapPath = "./my-security-path/pull_authorization_map.xml" };
+            // Act & Assert
+            await Assert.ThrowsAsync<NotFoundException>(() => _settingsService.DeleteAgentAsync(
+                "IDONTEXISTAGENT",
+                agents => agents!.SubmitAgents!,
+                (settings, agents) => settings.SubmitAgents = agents,
+                TestContext.Current.CancellationToken));
+            await Assert.ThrowsAsync<NotFoundException>(() => _settingsService.DeleteAgentAsync(
+                "IDONTEXISTAGENT",
+                agents => agents!.ReceiveAgents!,
+                (settings, agents) => settings.ReceiveAgents = agents,
+                TestContext.Current.CancellationToken));
 
-                // Act
-                await test.settingsSource.Save(new Model.Internal.Settings { PullSend = fixture });
-
-                // Assert
-                var expected = 
-                    Arg.Is<Model.Internal.Settings>(
-                        s => s.PullSend.AuthorizationMapPath == fixture.AuthorizationMapPath);
-
-                await test.settingsSource.Received().Save(expected);
-            }
+            await _settingsSource.DidNotReceive().SaveAsync(
+                Arg.Any<Model.Internal.Settings>(),
+                Arg.Any<CancellationToken>());
         }
 
-        public class Submit : As4SettingsServiceTests
+        [Fact]
+        public async Task Throws_Exception_When_Parameters_Are_Empty()
         {
-            [Fact]
-            public async Task Saves_Submit_Settings()
-            {
-                // Setup
-                var test = Setup();
-                test.settingsSource.Get().Returns(new Model.Internal.Settings { Submit = null });
+            // Arrange
+            Setup(TestContext.Current.CancellationToken);
 
-                var fixture = new SettingsSubmit { PayloadRetrievalPath = "./my-attachment-path/" };
+            // Act & Assert
+            await Assert.ThrowsAsync<ArgumentException>(() => _settingsService.DeleteAgentAsync("", null!, null!, TestContext.Current.CancellationToken));
+        }
+    }
 
-                // Act
-                await test.settingsSource.Save(new Model.Internal.Settings { Submit = fixture });
+    public class SavePullSend : As4SettingsServiceTests
+    {
+        [Fact]
+        public async Task Saves_Pull_Send_Settings()
+        {
+            // Arrange
+            Setup(TestContext.Current.CancellationToken);
+            _settingsSource.GetAsync(TestContext.Current.CancellationToken).Returns(new Model.Internal.Settings { PullSend = null });
 
-                // Assert
-                var expected =
-                    Arg.Is<Model.Internal.Settings>(
-                        s => s.Submit.PayloadRetrievalPath == fixture.PayloadRetrievalPath);
+            var fixture = new SettingsPullSend { AuthorizationMapPath = "./my-security-path/pull_authorization_map.xml" };
 
-                await test.settingsSource.Received().Save(expected);
-            }
+            // Act
+            await _settingsSource.SaveAsync(new Model.Internal.Settings { PullSend = fixture }, TestContext.Current.CancellationToken);
+
+            // Assert
+            var expected = Arg.Is<Model.Internal.Settings>(s => s.PullSend!.AuthorizationMapPath == fixture.AuthorizationMapPath);
+            await _settingsSource.Received().SaveAsync(expected, Arg.Any<CancellationToken>());
+        }
+    }
+
+    public class Submit : As4SettingsServiceTests
+    {
+        [Fact]
+        public async Task Saves_Submit_Settings()
+        {
+            // Arrange
+            Setup(TestContext.Current.CancellationToken);
+            _settingsSource.GetAsync(TestContext.Current.CancellationToken).Returns(new Model.Internal.Settings { Submit = null });
+
+            var fixture = new SettingsSubmit { PayloadRetrievalPath = "./my-attachment-path/" };
+
+            // Act
+            await _settingsSource.SaveAsync(new Model.Internal.Settings { Submit = fixture }, TestContext.Current.CancellationToken);
+
+            // Assert
+            var expected = Arg.Is<Model.Internal.Settings>(s => s.Submit!.PayloadRetrievalPath == fixture.PayloadRetrievalPath);
+            await _settingsSource.Received().SaveAsync(expected, Arg.Any<CancellationToken>());
         }
     }
 }
